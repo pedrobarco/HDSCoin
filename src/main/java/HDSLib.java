@@ -1,31 +1,95 @@
+import com.j256.ormlite.dao.Dao;
+import com.j256.ormlite.dao.DaoManager;
+import com.j256.ormlite.dao.ForeignCollection;
+import com.j256.ormlite.jdbc.JdbcConnectionSource;
+import com.j256.ormlite.support.ConnectionSource;
+import com.j256.ormlite.table.TableUtils;
 import domain.Account;
 import domain.AccountState;
 import domain.Transaction;
 import exceptions.AccountInsufficientAmountException;
 import exceptions.AccountNotFoundException;
+import exceptions.KeyAlreadyRegistered;
 import exceptions.TransactionNotFoundException;
 
-import java.util.HashMap;
+import java.sql.SQLException;
 import java.util.List;
-import java.util.Map;
+
 
 public class HDSLib {
-    public Map<Integer, Account> accountList;
-    public int transactionCounter;
+    private static HDSLib instance = null;
+    private Dao<Account, Integer> accounts;
+    private Dao<Transaction, Integer> transactions;
+    private ConnectionSource connectionSource;
 
-    public HDSLib() {
-        accountList = new HashMap<>();
-        transactionCounter = 0;
+    private HDSLib(String databaseName) {
+        connectionSource = null;
+        try {
+            connectionSource = new JdbcConnectionSource("jdbc:h2:./db/" + databaseName);
+            accounts = DaoManager.createDao(connectionSource, Account.class);
+            transactions = DaoManager.createDao(connectionSource, Transaction.class);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            TableUtils.createTable(connectionSource, Account.class);
+            TableUtils.createTable(connectionSource, Transaction.class);
+        } catch (SQLException e) {
+            System.out.println("Table already exists, skipping...");
+        }
     }
 
-    public void register(int key){
-        Account account = new Account(key);
-        accountList.put(key, account);
+    public static HDSLib getInstance() {
+        if (instance == null) {
+            instance = new HDSLib("database");
+        }
+        return instance;
+    }
+
+    public static HDSLib getTestingInstance() {
+        if (instance == null) {
+            instance = new HDSLib("test");
+        }
+        return instance;
+    }
+
+    public static void forceReset() {
+        // For testing purposes
+        instance.destroy();
+        instance = null;
+    }
+
+    public void destroy() {
+        try {
+            connectionSource.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void register(int key) throws KeyAlreadyRegistered {
+        try {
+            if (accounts.queryForId(key) != null) {
+                throw new KeyAlreadyRegistered("The following key is already registered: " + key);
+            }
+            Account account = new Account(key);
+            accounts.create(account);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
     public void sendAmount(int sourceKey, int destKey,  int amount) throws AccountNotFoundException, AccountInsufficientAmountException {
-        Account sourceAccount = accountList.get(sourceKey);
-        Account destAccount = accountList.get(destKey);
+        Account sourceAccount = null;
+        Account destAccount = null;
+        try {
+            sourceAccount = accounts.queryForId(sourceKey);
+            destAccount = accounts.queryForId(destKey);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
         if (sourceAccount == null) {
             throw new AccountNotFoundException("Source account not found!");
         } else if (destAccount == null) {
@@ -33,29 +97,55 @@ public class HDSLib {
         } else if (sourceAccount.getAmount() < amount) {
             throw new AccountInsufficientAmountException();
         }
-        int id = transactionCounter++;
-        Transaction transaction = new Transaction(sourceAccount, destAccount, amount, id);
-        sourceAccount.addTransaction(transaction);
-        destAccount.addTransaction(transaction);
+        Transaction transaction = new Transaction(sourceAccount, destAccount, amount);
+        try {
+            transactions.create(transaction);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        //sourceAccount.addTransaction(transaction);
+        //destAccount.addTransaction(transaction);
     }
 
     public AccountState checkAccount(int key) throws AccountNotFoundException {
-        Account account = accountList.get(key);
+        Account account = null;
+        try {
+            account = accounts.queryForId(key);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         if (account == null) {
             throw new AccountNotFoundException("Account not found!");
         }
-        return new AccountState(account.getKey(), account.getAmount(), account.getPendingIncomingTransactions());
+        List<Transaction> pendingIncomingTransactions= null;
+        try {
+            pendingIncomingTransactions = transactions.queryBuilder().where().eq("pending", true).and().eq("to",key).query();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return new AccountState(account.getKey(), account.getAmount(), pendingIncomingTransactions);
     }
 
     public void receiveAmount(int sourceKey, int destKey, int id) throws AccountNotFoundException, TransactionNotFoundException, AccountInsufficientAmountException {
-        Account sourceAccount = accountList.get(sourceKey);
-        Account destAccount = accountList.get(destKey);
+        Account sourceAccount = null;
+        Account destAccount = null;
+        try {
+            sourceAccount = accounts.queryForId(sourceKey);
+            destAccount = accounts.queryForId(destKey);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         if (sourceAccount == null) {
             throw new AccountNotFoundException("Source account not found!");
         } else if (destAccount == null) {
             throw new AccountNotFoundException("Destination account not found!");
         }
-        Transaction transaction = destAccount.getPendingIncomingTransactionById(id);
+        Transaction transaction = null;
+        try {
+            transaction = transactions.queryForId(id);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         if (transaction == null) {
             throw new TransactionNotFoundException();
         } else if (sourceAccount.getAmount() < transaction.getAmount()) {
@@ -65,11 +155,36 @@ public class HDSLib {
         destAccount.completeTransaction(transaction);
     }
 
-    public List<Transaction> audit(int key) throws AccountNotFoundException {
-        Account account = accountList.get(key);
+    public ForeignCollection<Transaction> audit(int key) throws AccountNotFoundException {
+        Account account = null;
+        try {
+            account = accounts.queryForId(key);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         if (account == null) {
             throw new AccountNotFoundException("Account not found!");
         }
         return account.getTransactions();
+    }
+
+    public Account getAccount(int key) {
+        Account account = null;
+        try {
+            account = accounts.queryForId(key);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return account;
+    }
+
+    public Transaction getTransaction(int id) {
+        Transaction transaction = null;
+        try {
+            transaction = transactions.queryForId(id);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return transaction;
     }
 }

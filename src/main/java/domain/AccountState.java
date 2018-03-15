@@ -4,14 +4,14 @@ import java.util.List;
 
 public class AccountState {
 
-    public int key;
-    public int amount;
-    public List<Transaction> pendingTransactions;
+    private int key;
+    private int amount;
+    private List<Transaction> pendingTransactions;
 
     public AccountState(int key, int amount, List<Transaction> pendingTransactions) {
-        setKey(key);
-        setAmount(amount);
-        setPendingTransactions(pendingTransactions);
+        this.key = key;
+        this.amount = amount;
+        this.pendingTransactions = pendingTransactions;
     }
 
     public int getKey() {

@@ -1,20 +1,26 @@
 package domain;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.stream.Collectors;
+import com.j256.ormlite.dao.ForeignCollection;
+import com.j256.ormlite.field.DatabaseField;
+import com.j256.ormlite.field.ForeignCollectionField;
+import com.j256.ormlite.table.DatabaseTable;
 
+@DatabaseTable(tableName = "accounts")
 public class Account {
-    private int amount;
+    @DatabaseField(id=true)
     private int key;
-    private List<Transaction> transactions;
-    private List<Transaction> pendingTransactions;
+    @DatabaseField
+    private int amount;
+    @ForeignCollectionField
+    private ForeignCollection<Transaction> transactions;
+
+    public Account() {
+
+    }
 
     public Account(int key) {
-        setKey(key);
-        setAmount(100);
-        transactions = new LinkedList<>();
-        pendingTransactions = new LinkedList<>();
+        this.key = key;
+        this.amount = 100;
     }
     public int getAmount() {
         return amount;
@@ -32,33 +38,21 @@ public class Account {
         this.key = key;
     }
 
-    public void addTransaction(Transaction transaction) {
-        pendingTransactions.add(transaction);
-    }
-
     public void completeTransaction(Transaction transaction) {
         if (transaction.getTo() == this) {
            this.setAmount(this.getAmount() + transaction.getAmount());
         } else {
             this.setAmount(this.getAmount() - transaction.getAmount());
         }
-        pendingTransactions.remove(transaction);
-        transactions.add(transaction);
+        transaction.setPending(false);
     }
 
-    public List<Transaction> getTransactions() {
+    public ForeignCollection<Transaction> getTransactions() {
         return transactions;
     }
 
-    public List<Transaction> getPendingTransactions() {
-        return pendingTransactions;
-    }
-
-    public Transaction getPendingIncomingTransactionById(int id){
-        return pendingTransactions.stream().filter(t -> t.getTo() == this && t.getId() == id).findFirst().orElse(null);
-    }
-
-    public List<Transaction> getPendingIncomingTransactions(){
-        return pendingTransactions.stream().filter(t -> t.getTo() == this).collect(Collectors.toList());
+    @Override
+    public String toString() {
+        return "Key: " + key + "\nBalance: " + amount;
     }
 }
