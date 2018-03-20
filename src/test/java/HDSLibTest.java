@@ -6,6 +6,8 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import javax.crypto.Cipher;
+import javax.crypto.SealedObject;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.*;
@@ -82,8 +84,11 @@ public class HDSLibTest {
 	public void registerSuccess() throws Exception {
 		String keyhash1 = hashKey(pubkey1);
 		String keyhash2 = hashKey(pubkey2);
-		hdsLib.register(pubkey1);
-		hdsLib.register(pubkey2);
+		String timestamp = HDSCrypto.getCurrentTimestamp();
+		SealedObject timestamp1 = HDSCrypto.encrypt(HDSCrypto.stringToPrivateKey(privkey1), timestamp);
+		SealedObject timestamp2 = HDSCrypto.encrypt(HDSCrypto.stringToPrivateKey(privkey2), timestamp);
+		hdsLib.register(pubkey1, timestamp1);
+		hdsLib.register(pubkey2, timestamp2);
 		Account a1 = hdsLib.getAccount(keyhash1);
 		Account a2 = hdsLib.getAccount(keyhash2);
 		assertNotNull(a1);
@@ -100,16 +105,21 @@ public class HDSLibTest {
 
 	@Test(expected = KeyAlreadyRegistered.class)
 	public void registerExistingAccount() throws Exception {
-		hdsLib.register(pubkey1);
-		hdsLib.register(pubkey1);
+		String timestamp = HDSCrypto.getCurrentTimestamp();
+		SealedObject timestamp1 = HDSCrypto.encrypt(HDSCrypto.stringToPrivateKey(privkey1), timestamp);
+		hdsLib.register(pubkey1, timestamp1);
+		hdsLib.register(pubkey1, timestamp1);
 	}
 
 	@Test
 	public void checkAccountSuccess() throws Exception {
 		String keyhash1 = hashKey(pubkey1);
 		String keyhash2 = hashKey(pubkey2);
-		hdsLib.register(pubkey1);
-		hdsLib.register(pubkey2);
+		String timestamp = HDSCrypto.getCurrentTimestamp();
+		SealedObject timestamp1 = HDSCrypto.encrypt(HDSCrypto.stringToPrivateKey(privkey1), timestamp);
+		SealedObject timestamp2 = HDSCrypto.encrypt(HDSCrypto.stringToPrivateKey(privkey2), timestamp);
+		hdsLib.register(pubkey1, timestamp1);
+		hdsLib.register(pubkey2, timestamp2);;
 		hdsLib.sendAmount(keyhash1, keyhash2, 30);
 		AccountState state = hdsLib.checkAccount(keyhash1);
 		assertNotNull(state);

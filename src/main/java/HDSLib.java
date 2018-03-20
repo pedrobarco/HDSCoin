@@ -12,7 +12,15 @@ import exceptions.AccountNotFoundException;
 import exceptions.KeyAlreadyRegistered;
 import exceptions.TransactionNotFoundException;
 
+import javax.crypto.SealedObject;
+import java.io.IOException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
 import java.sql.SQLException;
+import java.util.Base64;
+import java.util.Date;
 import java.util.List;
 
 
@@ -68,11 +76,23 @@ public class HDSLib {
         }
     }
 
-    public void register(String key) throws KeyAlreadyRegistered {
+    public void register(String key, SealedObject encTimestamp) throws KeyAlreadyRegistered, InvalidKeySpecException {
         try {
             Account account = new Account(key);
             if (accounts.queryForId(account.getKeyHash()) != null) {
                 throw new KeyAlreadyRegistered("The following key is already registered: " + key);
+            }
+            PublicKey pubKey = HDSCrypto.stringToPublicKey(key);
+            String timestamp = null;
+            try {
+                timestamp = (String)encTimestamp.getObject(pubKey);
+            } catch (Exception e) {
+                // TODO: Proper failed decryption exception (maybe just throws)
+                e.printStackTrace();
+            }
+            if (Math.abs(HDSCrypto.timestampToDate(timestamp).compareTo(new Date())) >= 60) {
+                // TODO: Proper exception
+                System.out.println("Timestamp not fresh");
             }
             accounts.create(account);
         } catch (SQLException e) {

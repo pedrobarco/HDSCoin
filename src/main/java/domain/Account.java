@@ -59,15 +59,6 @@ public class Account {
         this.key = key;
     }
 
-    /*public void completeTransaction(Transaction transaction) {
-        if (transaction.getTo() == this) {
-           this.setAmount(this.getAmount() + transaction.getAmount());
-        } else {
-            this.setAmount(this.getAmount() - transaction.getAmount());
-        }
-        transaction.setPending(false);
-    }*/
-
     public ForeignCollection<Transaction> getTransactions() {
         return transactions;
     }
