@@ -18,7 +18,7 @@ import java.util.List;
 
 public class HDSLib {
     private static HDSLib instance = null;
-    private Dao<Account, Integer> accounts;
+    private Dao<Account, String> accounts;
     private Dao<Transaction, Integer> transactions;
     private ConnectionSource connectionSource;
 
@@ -68,19 +68,19 @@ public class HDSLib {
         }
     }
 
-    public void register(int key) throws KeyAlreadyRegistered {
+    public void register(String key) throws KeyAlreadyRegistered {
         try {
-            if (accounts.queryForId(key) != null) {
+            Account account = new Account(key);
+            if (accounts.queryForId(account.getKeyHash()) != null) {
                 throw new KeyAlreadyRegistered("The following key is already registered: " + key);
             }
-            Account account = new Account(key);
             accounts.create(account);
         } catch (SQLException e) {
             e.printStackTrace();
         }
     }
 
-    public void sendAmount(int sourceKey, int destKey,  int amount) throws AccountNotFoundException, AccountInsufficientAmountException {
+    public void sendAmount(String sourceKey, String destKey,  int amount) throws AccountNotFoundException, AccountInsufficientAmountException {
         Account sourceAccount = null;
         Account destAccount = null;
         try {
@@ -98,16 +98,16 @@ public class HDSLib {
             throw new AccountInsufficientAmountException();
         }
         Transaction transaction = new Transaction(sourceAccount, destAccount, amount);
+        sourceAccount.addAmount(-amount);
         try {
             transactions.create(transaction);
+            accounts.update(sourceAccount);
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        //sourceAccount.addTransaction(transaction);
-        //destAccount.addTransaction(transaction);
     }
 
-    public AccountState checkAccount(int key) throws AccountNotFoundException {
+    public AccountState checkAccount(String key) throws AccountNotFoundException {
         Account account = null;
         try {
             account = accounts.queryForId(key);
@@ -119,14 +119,14 @@ public class HDSLib {
         }
         List<Transaction> pendingIncomingTransactions= null;
         try {
-            pendingIncomingTransactions = transactions.queryBuilder().where().eq("pending", true).and().eq("to",key).query();
+            pendingIncomingTransactions = transactions.queryBuilder().where().eq("pending", true).and().eq("to_id",key).query();
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return new AccountState(account.getKey(), account.getAmount(), pendingIncomingTransactions);
     }
 
-    public void receiveAmount(int sourceKey, int destKey, int id) throws AccountNotFoundException, TransactionNotFoundException, AccountInsufficientAmountException {
+    public void receiveAmount(String sourceKey, String destKey, int id) throws AccountNotFoundException, TransactionNotFoundException, AccountInsufficientAmountException {
         Account sourceAccount = null;
         Account destAccount = null;
         try {
@@ -151,11 +151,17 @@ public class HDSLib {
         } else if (sourceAccount.getAmount() < transaction.getAmount()) {
             throw new AccountInsufficientAmountException();
         }
-        sourceAccount.completeTransaction(transaction);
-        destAccount.completeTransaction(transaction);
+        destAccount.addAmount(transaction.getAmount());
+        transaction.setPending(false);
+        try {
+            transactions.update(transaction);
+            accounts.update(destAccount);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
-    public ForeignCollection<Transaction> audit(int key) throws AccountNotFoundException {
+    public ForeignCollection<Transaction> audit(String key) throws AccountNotFoundException {
         Account account = null;
         try {
             account = accounts.queryForId(key);
@@ -168,7 +174,7 @@ public class HDSLib {
         return account.getTransactions();
     }
 
-    public Account getAccount(int key) {
+    public Account getAccount(String key) {
         Account account = null;
         try {
             account = accounts.queryForId(key);

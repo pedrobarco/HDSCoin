@@ -5,10 +5,16 @@ import com.j256.ormlite.field.DatabaseField;
 import com.j256.ormlite.field.ForeignCollectionField;
 import com.j256.ormlite.table.DatabaseTable;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
+
 @DatabaseTable(tableName = "accounts")
 public class Account {
     @DatabaseField(id=true)
-    private int key;
+    private String keyHash;
+    @DatabaseField
+    private String key;
     @DatabaseField
     private int amount;
     @ForeignCollectionField
@@ -18,9 +24,16 @@ public class Account {
 
     }
 
-    public Account(int key) {
+    public Account(String key) {
         this.key = key;
         this.amount = 100;
+        try {
+            MessageDigest digester = MessageDigest.getInstance("SHA-256");
+            digester.update(key.getBytes());
+            keyHash = Base64.getEncoder().encodeToString(digester.digest());
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
     }
     public int getAmount() {
         return amount;
@@ -30,22 +43,30 @@ public class Account {
         this.amount = amount;
     }
 
-    public int getKey() {
+    public void addAmount(int amount) {
+        this.amount += amount;
+    }
+
+    public String getKeyHash() {
+        return keyHash;
+    }
+
+    public String getKey() {
         return key;
     }
 
-    public void setKey(int key) {
+    public void setKey(String key) {
         this.key = key;
     }
 
-    public void completeTransaction(Transaction transaction) {
+    /*public void completeTransaction(Transaction transaction) {
         if (transaction.getTo() == this) {
            this.setAmount(this.getAmount() + transaction.getAmount());
         } else {
             this.setAmount(this.getAmount() - transaction.getAmount());
         }
         transaction.setPending(false);
-    }
+    }*/
 
     public ForeignCollection<Transaction> getTransactions() {
         return transactions;
@@ -53,6 +74,9 @@ public class Account {
 
     @Override
     public String toString() {
-        return "Key: " + key + "\nBalance: " + amount;
+        return "--- Account Object ---" +
+                "\nKeyHash: " + keyHash +
+                "\nBalance: " + amount +
+                "\n-------";
     }
 }
