@@ -10,6 +10,35 @@ import java.util.Base64;
 import java.util.Date;
 
 public class HDSCrypto {
+	
+	private static byte[] digestMessage(String message) throws NoSuchAlgorithmException{
+		MessageDigest md = MessageDigest.getInstance("SHA-384");//384 para simetrica e 512 para assimetrica?
+		return md.digest(message.getBytes());		
+	}
+	
+	private static KeyPair generateKeypairEC() throws NoSuchAlgorithmException, NoSuchProviderException, InvalidAlgorithmParameterException{
+		KeyPairGenerator keyGen = KeyPairGenerator.getInstance("EC", "SunEC");
+		SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
+		keyGen.initialize(224, random); //160 eq to 1024 rsa; 224 eq to 2048 rsa
+		return keyGen.generateKeyPair();
+	}
+	
+	private static byte[] createSignatureEC(byte[] data, PrivateKey priv) throws InvalidKeyException, NoSuchAlgorithmException, SignatureException{
+		Signature s = Signature.getInstance("SHA1withECDSA");
+		s.initSign(priv);             // Initialize it; can throw InvalidKeyException
+		s.update(data);              // Data to sign; can throw SignatureException
+		byte[] signature = s.sign(); // Compute signature
+		return signature;
+	}
+	
+	private static boolean verifySignature(byte[] data, PublicKey pub, byte[] sig) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException{
+		Signature s = Signature.getInstance("SHA1withECDSA");
+		s.initVerify(pub);                            // Setup for verification
+		s.update(data);                                     // Specify signed data
+		return s.verify(sig);  
+	}
+	
+	
 	public static String publicKeyToString(PublicKey key){
 		return new String(Base64.getEncoder().encode(key.getEncoded()));
 	}
