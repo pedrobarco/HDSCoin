@@ -14,9 +14,11 @@ import exceptions.TransactionNotFoundException;
 
 import javax.crypto.SealedObject;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
+import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.sql.SQLException;
 import java.util.Base64;
@@ -76,31 +78,40 @@ public class HDSLib {
         }
     }
 
-    public void register(String key, SealedObject encTimestamp) throws KeyAlreadyRegistered, InvalidKeySpecException {
+    public void register(String stringKey, byte[] sig, byte[] timestamp) throws KeyAlreadyRegistered, InvalidKeySpecException {
         try {
-            Account account = new Account(key);
+            Account account = new Account(stringKey);
             if (accounts.queryForId(account.getKeyHash()) != null) {
-                throw new KeyAlreadyRegistered("The following key is already registered: " + key);
+                throw new KeyAlreadyRegistered("The following key is already registered: " + stringKey);
             }
-            PublicKey pubKey = HDSCrypto.stringToPublicKey(key);
-            String timestamp = null;
-            try {
-                timestamp = (String)encTimestamp.getObject(pubKey);
-            } catch (Exception e) {
-                // TODO: Proper failed decryption exception (maybe just throws)
-                e.printStackTrace();
-            }
-            if (Math.abs(HDSCrypto.timestampToDate(timestamp).compareTo(new Date())) >= 60) {
+
+            Date time = HDSCrypto.convertByteArrayToDate(timestamp);
+            if (Math.abs(HDSCrypto.timestampToDate(HDSCrypto.dateFormat.format(time)).compareTo(new Date())) >= 60) {
                 // TODO: Proper exception
                 System.out.println("Timestamp not fresh");
             }
+            
+            PublicKey pubKey = HDSCrypto.stringToPublicKey(stringKey); //TODO: ver melhor a convercao de string para publicKey
+            if(!HDSCrypto.verifySignature(timestamp, pubKey, sig)){
+            	System.out.println("Signature has been changed");
+            }
+            
             accounts.create(account);
         } catch (SQLException e) {
             e.printStackTrace();
-        }
+        } catch (InvalidKeyException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (NoSuchAlgorithmException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (SignatureException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
     }
 
-    public void sendAmount(String sourceKey, String destKey,  int amount) throws AccountNotFoundException, AccountInsufficientAmountException {
+    public void sendAmount(String sourceKey, String destKey,  int amount, byte[] timestamp, byte[] sig) throws AccountNotFoundException, AccountInsufficientAmountException, InvalidKeyException, NoSuchAlgorithmException, SignatureException, InvalidKeySpecException {
         Account sourceAccount = null;
         Account destAccount = null;
         try {
@@ -117,6 +128,22 @@ public class HDSLib {
         } else if (sourceAccount.getAmount() < amount) {
             throw new AccountInsufficientAmountException();
         }
+        
+        byte[] keyhashs = HDSCrypto.concacBytes(sourceKey.getBytes(), destKey.getBytes());
+		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		byte[] content = HDSCrypto.concacBytes(hashAmount, timestamp);
+		if(!HDSCrypto.verifySignature(content, HDSCrypto.stringToPublicKey(sourceAccount.getKey()), sig)){
+			//TODO: exception
+			System.out.println("Signature not valid");
+		}
+		
+		//TODO: como verificar se a transaccao e unica?
+		
+        /*if (Math.abs(HDSCrypto.timestampToDate(new String(timestamp)).compareTo(new Date())) >= 60) {
+            // TODO: Proper exception
+            System.out.println("Timestamp not fresh");
+        }*/
+        
         Transaction transaction = new Transaction(sourceAccount, destAccount, amount);
         sourceAccount.addAmount(-amount);
         try {
@@ -147,7 +174,8 @@ public class HDSLib {
     }
 
     public void receiveAmount(String sourceKey, String destKey, int id) throws AccountNotFoundException, TransactionNotFoundException, AccountInsufficientAmountException {
-        Account sourceAccount = null;
+    	//TODO: falta crypto
+    	Account sourceAccount = null;
         Account destAccount = null;
         try {
             sourceAccount = accounts.queryForId(sourceKey);
@@ -182,6 +210,7 @@ public class HDSLib {
     }
 
     public ForeignCollection<Transaction> audit(String key) throws AccountNotFoundException {
+    	//TODO: falta crypto
         Account account = null;
         try {
             account = accounts.queryForId(key);
