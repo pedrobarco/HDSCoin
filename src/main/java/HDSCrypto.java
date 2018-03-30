@@ -16,6 +16,17 @@ public class HDSCrypto {
 	
 	public static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss");
 	
+	public static boolean validateTimestamp(Date receivedDate, Date timeSent) throws ParseException{
+		String time = dateFormat.format(timeSent);
+		Date sentDate = dateFormat.parse(time);
+		long diff = receivedDate.getTime() - sentDate.getTime();
+		long diffSeconds = diff / 1000;
+		if( diffSeconds < -5 || diffSeconds > 5 ){
+			return false;
+		}
+		return true;
+	}
+	
 	public static byte[] concacBytes(byte[] a, byte[] b){
     	byte[] c = new byte[a.length + b.length];
     	System.arraycopy(a, 0, c, 0, a.length);

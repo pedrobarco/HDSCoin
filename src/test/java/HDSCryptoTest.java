@@ -12,8 +12,8 @@ import static org.junit.Assert.*;
 public class HDSCryptoTest {
 	private static String pubkey1;
 	private static String privkey1;
-	private static String pubkey2;
-	private static String privkey2;
+	//private static String pubkey2;
+	//private static String privkey2;
 
 	@BeforeClass
 	public static void setUpAll() {
@@ -33,9 +33,9 @@ public class HDSCryptoTest {
 		KeyPair pair = keyGen.generateKeyPair();
 		pubkey1 = new String(Base64.getEncoder().encode(pair.getPublic().getEncoded()));
 		privkey1 = new String(Base64.getEncoder().encode(pair.getPrivate().getEncoded()));
-		pair = keyGen.generateKeyPair();
-		pubkey2 = new String(Base64.getEncoder().encode(pair.getPublic().getEncoded()));
-		privkey2 = new String(Base64.getEncoder().encode(pair.getPrivate().getEncoded()));
+		//pair = keyGen.generateKeyPair();
+		//pubkey2 = new String(Base64.getEncoder().encode(pair.getPublic().getEncoded()));
+		//privkey2 = new String(Base64.getEncoder().encode(pair.getPrivate().getEncoded()));
 	}
 
 	@Before

@@ -28,7 +28,7 @@ public class Account {
         this.key = key;
         this.amount = 100;
         try {
-            MessageDigest digester = MessageDigest.getInstance("SHA-256");
+            MessageDigest digester = MessageDigest.getInstance("SHA-256"); //TODO mais tarde mudar o SHA 512
             digester.update(key.getBytes());
             keyHash = Base64.getEncoder().encodeToString(digester.digest());
         } catch (NoSuchAlgorithmException e) {

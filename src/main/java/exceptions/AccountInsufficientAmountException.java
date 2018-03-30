@@ -1,7 +1,8 @@
 package exceptions;
 
+@SuppressWarnings("serial")
 public class AccountInsufficientAmountException extends Exception {
-    public AccountInsufficientAmountException() {
-        super();
+    public AccountInsufficientAmountException(String message) {
+        super(message);
     }
 }
