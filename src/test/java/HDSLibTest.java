@@ -654,6 +654,27 @@ public class HDSLibTest {
 		hdsLib.sendAmount(keyhash1, keyhash2, amount, null, sigSendAmount);
 	}
 
+	@Test(expected = SameSourceAndDestAccountException.class)
+	public void sendAmountSameAccount() throws Exception{
+		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
+		String keyhash1 = hashKey(stringPubEC1);
+		int amount = 30;
+		
+		Date timestamp = new Date();
+		
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC1, timestamp, sig);
+		
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash1.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
+		
+		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
+		hdsLib.sendAmount(keyhash1, keyhash1, amount, timestamp2, sigSendAmount);
+	}
+
 	@Test(expected = NullArgumentException.class)
 	public void sendAmountNullSig() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);

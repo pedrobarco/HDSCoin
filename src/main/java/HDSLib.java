@@ -107,7 +107,7 @@ public class HDSLib {
 		}
     }
 
-    public void sendAmount(String sourceKey, String destKey, int amount, Date timestamp, byte[] sig) throws AccountNotFoundException, AccountInsufficientAmountException, InvalidKeyException, NoSuchAlgorithmException, SignatureException, InvalidKeySpecException, TimestampNotFreshException, InvalidSignatureException, ParseException, NullArgumentException, InvalidAmountException {
+    public void sendAmount(String sourceKey, String destKey, int amount, Date timestamp, byte[] sig) throws AccountNotFoundException, AccountInsufficientAmountException, InvalidKeyException, NoSuchAlgorithmException, SignatureException, InvalidKeySpecException, TimestampNotFreshException, InvalidSignatureException, ParseException, NullArgumentException, InvalidAmountException, SameSourceAndDestAccountException {
 		Date timeReceived = new Date();
 
     	checkNullKey(sourceKey);
@@ -127,7 +127,9 @@ public class HDSLib {
             throw new AccountNotFoundException("Destination account not found!");
         } else if (sourceAccount.getAmount() < amount) {
             throw new AccountInsufficientAmountException("There is not enough money in your account");
-        }
+        } else if (sourceKey.equals(destKey)) {
+	    	throw new SameSourceAndDestAccountException("Can not send money to yourself");
+	    }
 
         if (!HDSCrypto.validateTimestamp(timeReceived, timestamp)) {
         	throw new TimestampNotFreshException("Timestamp not fresh");
