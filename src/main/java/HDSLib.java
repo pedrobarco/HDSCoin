@@ -1,3 +1,14 @@
+import com.j256.ormlite.dao.Dao;
+import com.j256.ormlite.dao.DaoManager;
+import com.j256.ormlite.dao.ForeignCollection;
+import com.j256.ormlite.jdbc.JdbcConnectionSource;
+import com.j256.ormlite.support.ConnectionSource;
+import com.j256.ormlite.table.TableUtils;
+import domain.Account;
+import domain.AccountState;
+import domain.Transaction;
+import exceptions.*;
+
 import java.math.BigInteger;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -8,25 +19,6 @@ import java.sql.SQLException;
 import java.text.ParseException;
 import java.util.Date;
 import java.util.List;
-
-import com.j256.ormlite.dao.Dao;
-import com.j256.ormlite.dao.DaoManager;
-import com.j256.ormlite.dao.ForeignCollection;
-import com.j256.ormlite.jdbc.JdbcConnectionSource;
-import com.j256.ormlite.support.ConnectionSource;
-import com.j256.ormlite.table.TableUtils;
-
-import domain.Account;
-import domain.AccountState;
-import domain.Transaction;
-import exceptions.AccountInsufficientAmountException;
-import exceptions.AccountNotFoundException;
-import exceptions.ArgumentsException;
-import exceptions.InvalidSignatureException;
-import exceptions.KeyAlreadyRegistered;
-import exceptions.TimestampNotFreshException;
-import exceptions.TransactionNotFoundException;
-import exceptions.TransactionWrongKeyException;
 
 
 public class HDSLib {
@@ -81,23 +73,25 @@ public class HDSLib {
         }
     }
 
-    public void register(String stringKey, byte[] sig, byte[] timestamp) throws KeyAlreadyRegistered, InvalidKeySpecException, TimestampNotFreshException, InvalidSignatureException, ParseException, ArgumentsException {
+    public void register(String key, Date timestamp, byte[] sig) throws KeyAlreadyRegistered, InvalidKeySpecException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException {
         try {
-        	Date timeReceived = new Date();
-        	checkRegisterArguments(stringKey, sig, timestamp);
+			Date timeReceived = new Date();
+
+        	checkNullKey(key);
+			checkNullTimestamp(timestamp);
+			checkNullSignature(sig);
         	
-            Account account = new Account(stringKey);
+            Account account = new Account(key);
             if (accounts.queryForId(account.getKeyHash()) != null) {
-                throw new KeyAlreadyRegistered("The following key is already registered: " + stringKey);
+                throw new KeyAlreadyRegistered("The following key is already registered: " + key);
             }
 
-            Date time = HDSCrypto.convertByteArrayToDate(timestamp);
-            if (!HDSCrypto.validateTimestamp(timeReceived, time)) {
+            if (!HDSCrypto.validateTimestamp(timeReceived, timestamp)) {
             	throw new TimestampNotFreshException("Timestamp not fresh");
             }
             
-            PublicKey pubKey = HDSCrypto.stringToPublicKey(stringKey);
-            if(!HDSCrypto.verifySignature(timestamp, pubKey, sig)){
+            PublicKey pubKey = HDSCrypto.stringToPublicKey(key);
+            if(!HDSCrypto.verifySignature(HDSCrypto.dateToString(timestamp).getBytes(), pubKey, sig)){
             	throw new InvalidSignatureException("Signature not valid");
             }
             
@@ -113,9 +107,16 @@ public class HDSLib {
 		}
     }
 
-    public void sendAmount(String sourceKey, String destKey, int amount, byte[] timestamp, byte[] sig) throws AccountNotFoundException, AccountInsufficientAmountException, InvalidKeyException, NoSuchAlgorithmException, SignatureException, InvalidKeySpecException, TimestampNotFreshException, InvalidSignatureException, ParseException, ArgumentsException {
-    	Date timeReceived = new Date();
-    	checksendAmountArguments(sourceKey, destKey, amount, timestamp, sig);
+    public void sendAmount(String sourceKey, String destKey, int amount, Date timestamp, byte[] sig) throws AccountNotFoundException, AccountInsufficientAmountException, InvalidKeyException, NoSuchAlgorithmException, SignatureException, InvalidKeySpecException, TimestampNotFreshException, InvalidSignatureException, ParseException, NullArgumentException, InvalidAmountException {
+		Date timeReceived = new Date();
+
+    	checkNullKey(sourceKey);
+		checkNullKey(destKey);
+		checkNullTimestamp(timestamp);
+		checkNullSignature(sig);
+		if (amount <= 0) {
+			throw new InvalidAmountException();
+		}
     	
     	Account sourceAccount = getAccount(sourceKey);
         Account destAccount = getAccount(destKey);
@@ -127,15 +128,14 @@ public class HDSLib {
         } else if (sourceAccount.getAmount() < amount) {
             throw new AccountInsufficientAmountException("There is not enough money in your account");
         }
-        
-        Date time = HDSCrypto.convertByteArrayToDate(timestamp);
-        if (!HDSCrypto.validateTimestamp(timeReceived, time)) {
+
+        if (!HDSCrypto.validateTimestamp(timeReceived, timestamp)) {
         	throw new TimestampNotFreshException("Timestamp not fresh");
 		}
         
-        byte[] keyhashs = HDSCrypto.concacBytes(sourceKey.getBytes(), destKey.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		byte[] content = HDSCrypto.concacBytes(hashAmount, timestamp);
+        byte[] keyhashes = HDSCrypto.concatBytes(sourceKey.getBytes(), destKey.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashes, BigInteger.valueOf(amount).toByteArray());
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp).getBytes());
 		if(!HDSCrypto.verifySignature(content, HDSCrypto.stringToPublicKey(sourceAccount.getKey()), sig)){
 			throw new InvalidSignatureException("Signature not valid");
 		}
@@ -152,8 +152,8 @@ public class HDSLib {
         }
     }
 
-    public AccountState checkAccount(String key) throws AccountNotFoundException, ArgumentsException {
-    	checkArguments(key);
+    public AccountState checkAccount(String key) throws AccountNotFoundException, NullArgumentException {
+    	checkNullKey(key);
     	Account account = getAccount(key);
         
         if (account == null) {
@@ -168,9 +168,13 @@ public class HDSLib {
         return new AccountState(account.getKey(), account.getAmount(), pendingIncomingTransactions);
     }
 
-    public void receiveAmount(String sourceKey, String destKey, int id, byte[] timestamp, byte[] sig) throws AccountNotFoundException, TransactionNotFoundException, AccountInsufficientAmountException, InvalidKeyException, NoSuchAlgorithmException, SignatureException, InvalidKeySpecException, TimestampNotFreshException, TransactionWrongKeyException, InvalidSignatureException, ParseException, ArgumentsException {
+    public void receiveAmount(String sourceKey, String destKey, int id, Date timestamp, byte[] sig) throws AccountNotFoundException, TransactionNotFoundException, AccountInsufficientAmountException, InvalidKeyException, NoSuchAlgorithmException, SignatureException, InvalidKeySpecException, TimestampNotFreshException, TransactionWrongKeyException, InvalidSignatureException, ParseException, NullArgumentException {
+    	// TODO: Don't need sourceKey and destKey
     	Date timeReceived = new Date();
-    	checkReceiveAmountArguments(sourceKey, destKey, id, timestamp, sig);
+    	checkNullKey(sourceKey);
+		checkNullKey(destKey);
+		checkNullTimestamp(timestamp);
+		checkNullSignature(sig);
     	
     	Account sourceAccount = getAccount(sourceKey);
         Account destAccount = getAccount(destKey);
@@ -194,15 +198,14 @@ public class HDSLib {
 		if(!transaction.getTo().getKeyHash().equals(destKey)){
 			throw new TransactionWrongKeyException("Wrong destination transaction");
 		}
-        
-		Date time = HDSCrypto.convertByteArrayToDate(timestamp);
-        if (!HDSCrypto.validateTimestamp(timeReceived, time)) {
+
+        if (!HDSCrypto.validateTimestamp(timeReceived, timestamp)) {
         	throw new TimestampNotFreshException("Timestamp not fresh");
 		}
         
-        byte[] keyhashs = HDSCrypto.concacBytes(sourceKey.getBytes(), destKey.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		byte[] content = HDSCrypto.concacBytes(hashAmount, timestamp);
+        byte[] keyhashs = HDSCrypto.concatBytes(sourceKey.getBytes(), destKey.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp).getBytes());
 		if(!HDSCrypto.verifySignature(content, HDSCrypto.stringToPublicKey(destAccount.getKey()), sig)){
 			throw new InvalidSignatureException("Signature not valid");
 		}
@@ -217,8 +220,8 @@ public class HDSLib {
         }
     }
 
-    public ForeignCollection<Transaction> audit(String key) throws AccountNotFoundException, ArgumentsException {
-    	checkArguments(key);
+    public ForeignCollection<Transaction> audit(String key) throws AccountNotFoundException, NullArgumentException {
+    	checkNullKey(key);
     	
     	Account account = null;
         try {
@@ -251,28 +254,22 @@ public class HDSLib {
         }
         return transaction;
     }
-    
-    private void checkRegisterArguments(String stringKey, byte[] sig, byte[] timestamp) throws ArgumentsException {
-		if (stringKey == null || sig == null || timestamp == null || stringKey.trim().equals("")) {
-			throw new ArgumentsException("Null or empty string is not accepted");
+
+	private void checkNullKey(String key) throws NullArgumentException {
+		if (key == null || key.trim().equals("")) {
+			throw new NullArgumentException("Null or empty key");
 		}
 	}
 
-    private void checksendAmountArguments(String sourceKey, String destKey,  int amount, byte[] timestamp, byte[] sig) throws ArgumentsException {
-    	if (sourceKey == null || destKey == null || sig == null || timestamp == null || amount <=0 || sourceKey.trim().equals("") || destKey.trim().equals("")) {
-    		throw new ArgumentsException("Null or empty string is not accepted");
-    	}
-    }
+    private void checkNullSignature(byte[] sig) throws NullArgumentException {
+		if (sig == null) {
+			throw new NullArgumentException("Null or empty signature");
+		}
+	}
 
-    private void checkArguments(String stringKey) throws ArgumentsException {
-    	if (stringKey == null || stringKey.trim().equals("")) {
-    		throw new ArgumentsException("Null or empty string is not accepted");
-    	}
-    }
-
-    private void checkReceiveAmountArguments(String sourceKey, String destKey, int id, byte[] timestamp, byte[] sig) throws ArgumentsException {
-    	if (sourceKey == null || destKey == null || sig == null || timestamp == null || id <=0 || sourceKey.trim().equals("") || destKey.trim().equals("")) {
-    		throw new ArgumentsException("Null or empty string is not accepted");
-    	}
-    }
+	private void checkNullTimestamp(Date timestamp) throws NullArgumentException {
+		if (timestamp == null) {
+			throw new NullArgumentException("Null or empty timestamp");
+		}
+	}
 }

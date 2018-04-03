@@ -3,11 +3,11 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import javax.crypto.SealedObject;
 import java.security.*;
 import java.util.Base64;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 public class HDSCryptoTest {
 	private static String pubkey1;
@@ -65,12 +65,5 @@ public class HDSCryptoTest {
 
 	@Test
 	public void encryptionTest() throws Exception {
-		String original = "Hello World";
-		SealedObject encrypted = HDSCrypto.encrypt(HDSCrypto.stringToPrivateKey(privkey1), original);
-		assertNotNull(encrypted);
-		String decrypted = HDSCrypto.decrypt(HDSCrypto.stringToPublicKey(pubkey1), encrypted);
-		assertNotNull(decrypted);
-		assertEquals(original, decrypted);
 	}
-
 }

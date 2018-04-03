@@ -1,38 +1,21 @@
-import static java.util.Base64.getEncoder;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-
-import java.math.BigInteger;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.security.SecureRandom;
-import java.util.Calendar;
-import java.util.Date;
-
+import domain.Account;
+import domain.AccountState;
+import domain.Transaction;
+import exceptions.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import domain.Account;
-import domain.AccountState;
-import domain.Transaction;
-import exceptions.AccountInsufficientAmountException;
-import exceptions.AccountNotFoundException;
-import exceptions.ArgumentsException;
-import exceptions.InvalidSignatureException;
-import exceptions.KeyAlreadyRegistered;
-import exceptions.TimestampNotFreshException;
-import exceptions.TransactionNotFoundException;
-import exceptions.TransactionWrongKeyException;
+import java.math.BigInteger;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.security.*;
+import java.util.Calendar;
+import java.util.Date;
+
+import static java.util.Base64.getEncoder;
+import static org.junit.Assert.*;
 
 public class HDSLibTest {
 	private HDSLib hdsLib;
@@ -71,31 +54,6 @@ public class HDSLibTest {
 		ec = keyGen.generateKeyPair();
 		pubEC3 = ec.getPublic();
 		privEC3 = ec.getPrivate();
-		
-		
-		// Generate 4 key pairs for testing
-		/*
-		KeyPairGenerator keyGen = null;
-		SecureRandom random = null;
-		try {
-			keyGen = KeyPairGenerator.getInstance("RSA");
-			random = SecureRandom.getInstance("SHA1PRNG");
-		} catch (NoSuchAlgorithmException e) {
-			e.printStackTrace();
-		}
-		keyGen.initialize(1024,  random);
-		KeyPair pair = keyGen.generateKeyPair();
-		pubkey1 = new String(Base64.getEncoder().encode(pair.getPublic().getEncoded()));
-		privkey1 = new String(Base64.getEncoder().encode(pair.getPrivate().getEncoded()));
-		pair = keyGen.generateKeyPair();
-		pubkey2 = new String(Base64.getEncoder().encode(pair.getPublic().getEncoded()));
-		privkey2 = new String(Base64.getEncoder().encode(pair.getPrivate().getEncoded()));
-		pair = keyGen.generateKeyPair();
-		pubkey3 = new String(Base64.getEncoder().encode(pair.getPublic().getEncoded()));
-		privkey3 = new String(Base64.getEncoder().encode(pair.getPrivate().getEncoded()));
-		pair = keyGen.generateKeyPair();
-		pubkey4 = new String(Base64.getEncoder().encode(pair.getPublic().getEncoded()));
-		privkey4 = new String(Base64.getEncoder().encode(pair.getPrivate().getEncoded()));*/
 	}
 
 	@Before
@@ -127,16 +85,13 @@ public class HDSLibTest {
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
 		String keyhash1 = hashKey(stringPubEC1);
 		String keyhash2 = hashKey(stringPubEC2);
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
+		Date timestamp = new Date();
+
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
 		
-		//SealedObject timestamp1 = HDSCrypto.encrypt(HDSCrypto.stringToPrivateKey(privkey1), timestamp);
-		//SealedObject timestamp2 = HDSCrypto.encrypt(HDSCrypto.stringToPrivateKey(privkey2), timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		Account a1 = hdsLib.getAccount(keyhash1);
 		Account a2 = hdsLib.getAccount(keyhash2);
 		assertNotNull(a1);
@@ -165,24 +120,20 @@ public class HDSLibTest {
 		String keyhash1 = hashKey(stringPubEC1);
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 30;
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
+		Date timestamp = new Date();
 		
-		byte[] sigRegister1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sigRegister2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		//SealedObject timestamp1 = HDSCrypto.encrypt(HDSCrypto.stringToPrivateKey(privkey1), timestamp);
-		//SealedObject timestamp2 = HDSCrypto.encrypt(HDSCrypto.stringToPrivateKey(privkey2), timestamp);
-		hdsLib.register(stringPubEC1, sigRegister1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sigRegister2, byteTimestamp);
+		byte[] sigRegister1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sigRegister2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sigRegister1);
+		hdsLib.register(stringPubEC2, timestamp, sigRegister2);
 
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date newTimestamp = HDSCrypto.createTimestamp();
-		byte[] newByteTimestamp = HDSCrypto.convertDateToByteArray(newTimestamp);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, newByteTimestamp);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date newTimestamp = new Date();
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(newTimestamp).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, newByteTimestamp, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, newTimestamp, sigSendAmount);
 		AccountState state = hdsLib.checkAccount(keyhash1);
 		assertNotNull(state);
 		assertEquals(state.getAmount(), 70);
@@ -209,29 +160,27 @@ public class HDSLibTest {
 		String keyhash1 = hashKey(stringPubEC1);
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 60;
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		
-		byte[] sigRegister1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sigRegister2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
+		Date timestamp = new Date();
+
+		byte[] sigRegister1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sigRegister2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
 		//SealedObject timestamp1 = HDSCrypto.encrypt(HDSCrypto.stringToPrivateKey(privkey1), timestamp);
 		//SealedObject timestamp2 = HDSCrypto.encrypt(HDSCrypto.stringToPrivateKey(privkey2), timestamp);
-		hdsLib.register(stringPubEC1, sigRegister1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sigRegister2, byteTimestamp);
+		hdsLib.register(stringPubEC1, timestamp, sigRegister1);
+		hdsLib.register(stringPubEC2, timestamp, sigRegister2);
 		
 		AccountState state = hdsLib.checkAccount(keyhash1);
 		assertNotNull(state);
 		assertEquals(state.getAmount(), 100);
 		assertEquals(state.getPendingTransactions().size(), 0);
 
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		state = hdsLib.checkAccount(keyhash1);
 		assertNotNull(state);
 		assertEquals(state.getAmount(), 40);
@@ -251,13 +200,12 @@ public class HDSLibTest {
 		assertEquals(state.getAmount(), a2.getAmount());
 		
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC2);
-		hdsLib.receiveAmount(keyhash1, keyhash2, id, byteTimestamp3, sigReceiveAmount);
+		hdsLib.receiveAmount(keyhash1, keyhash2, id, timestamp3, sigReceiveAmount);
 		state = hdsLib.checkAccount(keyhash1);
 		a1 = hdsLib.getAccount(keyhash1);
 		assertNotNull(a1);
@@ -285,72 +233,65 @@ public class HDSLibTest {
 		String keyhash3 = hashKey(stringPubEC3);
 		int amount = 100;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sigRegister1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sigRegister2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		byte[] sigRegister3 = HDSCrypto.createSignatureEC(byteTimestamp, privEC3);
-		hdsLib.register(stringPubEC1, sigRegister1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sigRegister2, byteTimestamp);
-		hdsLib.register(stringPubEC3, sigRegister3, byteTimestamp);
+		Date timestamp = new Date();
+		byte[] sigRegister1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sigRegister2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		byte[] sigRegister3 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC3);
+		hdsLib.register(stringPubEC1, timestamp, sigRegister1);
+		hdsLib.register(stringPubEC2, timestamp, sigRegister2);
+		hdsLib.register(stringPubEC3, timestamp, sigRegister3);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		byte[] sigSendAmount1 = HDSCrypto.createSignatureEC(content, privEC1);
 		
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount1);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount1);
 		
 		AccountState state = hdsLib.checkAccount(keyhash2);
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		byte[] sigReceiveAmount1 = HDSCrypto.createSignatureEC(content2, privEC2);
 		
-		hdsLib.receiveAmount(keyhash1, keyhash2, id, byteTimestamp3, sigReceiveAmount1);
+		hdsLib.receiveAmount(keyhash1, keyhash2, id, timestamp3, sigReceiveAmount1);
 		
 		amount = 30;
-		keyhashs = HDSCrypto.concacBytes(keyhash3.getBytes(), keyhash1.getBytes());
-		hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp4 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp4 = HDSCrypto.convertDateToByteArray(timestamp4);
-		content = HDSCrypto.concacBytes(hashAmount, byteTimestamp4);
+		keyhashs = HDSCrypto.concatBytes(keyhash3.getBytes(), keyhash1.getBytes());
+		hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp4 = new Date();
+		content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp4).getBytes());
 		byte[] sigSendAmount2 = HDSCrypto.createSignatureEC(content, privEC3);
 		
-		hdsLib.sendAmount(keyhash3, keyhash1, amount, byteTimestamp4, sigSendAmount2);
+		hdsLib.sendAmount(keyhash3, keyhash1, amount, timestamp4, sigSendAmount2);
 		
 		state = hdsLib.checkAccount(keyhash1);
 		id = state.getPendingTransactions().get(0).getId();	
-		hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp5 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp5 = HDSCrypto.convertDateToByteArray(timestamp5);
-		byte[] content3 = HDSCrypto.concacBytes(hashID, byteTimestamp5);
+		hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp5 = new Date();
+		byte[] content3 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp5).getBytes());
 		byte[] sigReceiveAmount2 = HDSCrypto.createSignatureEC(content3, privEC1);
 		
-		hdsLib.receiveAmount(keyhash3, keyhash1, id, byteTimestamp5, sigReceiveAmount2);
+		hdsLib.receiveAmount(keyhash3, keyhash1, id, timestamp5, sigReceiveAmount2);
 		
-		keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp6 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp6 = HDSCrypto.convertDateToByteArray(timestamp6);
-		content = HDSCrypto.concacBytes(hashAmount, byteTimestamp6);
+		keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp6 = new Date();
+		content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp6).getBytes());
 		byte[] sigSendAmount3 = HDSCrypto.createSignatureEC(content, privEC1);
 		
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp6, sigSendAmount3);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp6, sigSendAmount3);
 		
 		state = hdsLib.checkAccount(keyhash2);
 		id = state.getPendingTransactions().get(0).getId();	
-		hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp7 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp7 = HDSCrypto.convertDateToByteArray(timestamp7);
-		byte[] content4 = HDSCrypto.concacBytes(hashID, byteTimestamp7);
+		hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp7 = new Date();
+		byte[] content4 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp7).getBytes());
 		byte[] sigReceiveAmount3 = HDSCrypto.createSignatureEC(content4, privEC2);
 		
-		hdsLib.receiveAmount(keyhash1, keyhash2, id, byteTimestamp7, sigReceiveAmount3);
+		hdsLib.receiveAmount(keyhash1, keyhash2, id, timestamp7, sigReceiveAmount3);
 		
 		AccountState state1 = hdsLib.checkAccount(keyhash1);
 		AccountState state2 = hdsLib.checkAccount(keyhash2);
@@ -392,52 +333,51 @@ public class HDSLibTest {
 	@Test(expected = KeyAlreadyRegistered.class)
 	public void registerExistingAccount() throws Exception {
 		String stringPubEC = HDSCrypto.publicKeyToString(pubEC1);
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC, sig, byteTimestamp);
-		hdsLib.register(stringPubEC, sig, byteTimestamp);
+		Date timestamp = new Date();
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC, timestamp, sig);
+		hdsLib.register(stringPubEC, timestamp, sig);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void registerNullKey() throws Exception {
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(null, sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(null, timestamp, sig);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void registerNullSig() throws Exception {
 		String stringPubEC = HDSCrypto.publicKeyToString(pubEC1);
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		hdsLib.register(stringPubEC, null, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		hdsLib.register(stringPubEC, timestamp, null);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void registerNullTimestamp() throws Exception {
 		String stringPubEC = HDSCrypto.publicKeyToString(pubEC1);
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC, sig, null);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC, null, sig);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void registerEmptyKey() throws Exception {
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register("", sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register("", timestamp, sig);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void registerBlankKey() throws Exception {
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register("   ", sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register("   ", timestamp, sig);
 	}
 	
 	@Test(expected = TimestampNotFreshException.class)
@@ -448,9 +388,9 @@ public class HDSLibTest {
 		c.setTime(new Date());
 		c.add(Calendar.DATE, 2);
 		Date timestamp = c.getTime();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC, sig, byteTimestamp);
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC, timestamp, sig);
 	}
 	
 	@Test(expected = InvalidSignatureException.class)
@@ -461,11 +401,10 @@ public class HDSLibTest {
 		c.setTime(new Date());
 		c.add(Calendar.SECOND, 2);
 		Date changeTimestamp = c.getTime();
-		byte[] changeByteTimestamp = HDSCrypto.convertDateToByteArray(changeTimestamp);
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC, sig, changeByteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC, changeTimestamp, sig);
 	}
 	
 	@Test(expected = AccountNotFoundException.class)
@@ -476,19 +415,18 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 30;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC2, sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC2, timestamp, sig);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC2);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 	}
 	
 	@Test(expected = AccountNotFoundException.class)
@@ -499,19 +437,18 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 30;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC1, sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC1, timestamp, sig);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 	}
 
 	@Test(expected = AccountInsufficientAmountException.class)
@@ -522,30 +459,30 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 100;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 
 		amount = 30;
-		byte[] hashAmount2 = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashAmount2, byteTimestamp3);
+		byte[] hashAmount2 = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp3 = new Date();
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashAmount2, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigSendAmount2 = HDSCrypto.createSignatureEC(content2, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp3, sigSendAmount2);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp3, sigSendAmount2);
 	}
 	
 	@Test(expected = TimestampNotFreshException.class)
@@ -556,24 +493,24 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 30;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
 		Calendar c = Calendar.getInstance();
 		c.setTime(new Date());
 		c.add(Calendar.DATE, 2);
 		Date timestamp2 = c.getTime();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 	}
 
 	@Test(expected = InvalidSignatureException.class)
@@ -585,24 +522,24 @@ public class HDSLibTest {
 		int amount = 30;
 		int changeAmount = 31;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(changeAmount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(changeAmount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void sendAmountNullSourceKey() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
@@ -610,22 +547,22 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 30;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC1, sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC1, timestamp, sig);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(null, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(null, keyhash2, amount, timestamp2, sigSendAmount);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void sendAmountNullDestinationKey() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
@@ -633,22 +570,22 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 30;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC1, sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC1, timestamp, sig);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, null, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, null, amount, timestamp2, sigSendAmount);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = InvalidAmountException.class)
 	public void sendAmountNegativeAmount() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
@@ -656,22 +593,22 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = -30;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC1, sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC1, timestamp, sig);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = InvalidAmountException.class)
 	public void sendAmountNeutralAmount() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
@@ -679,22 +616,22 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 0;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC1, sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC1, timestamp, sig);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void sendAmountNullTimestamp() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
@@ -702,22 +639,22 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 30;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC1, sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC1, timestamp, sig);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
 		hdsLib.sendAmount(keyhash1, keyhash2, amount, null, sigSendAmount);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void sendAmountNullSig() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
@@ -725,54 +662,54 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 30;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC1, sig, byteTimestamp);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp, null);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC1, timestamp, sig);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp, null);
 	}
 	
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void checkAccountNullKey() throws Exception {
 		String stringPubEC = HDSCrypto.publicKeyToString(pubEC1);
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC, sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC, timestamp, sig);
 		hdsLib.checkAccount(null);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void checkAccountEmptyKey() throws Exception {
 		String stringPubEC = HDSCrypto.publicKeyToString(pubEC1);
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC, sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC, timestamp, sig);
 		hdsLib.checkAccount("");
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void checkAccountBlankKey() throws Exception {
 		String stringPubEC = HDSCrypto.publicKeyToString(pubEC1);
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC, sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC, timestamp, sig);
 		hdsLib.checkAccount("   ");
 	}
 
 	@Test(expected = AccountNotFoundException.class)
 	public void checkAccountWrongKey() throws Exception {
 		String stringPubEC = HDSCrypto.publicKeyToString(pubEC1);
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC, sig, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC, timestamp, sig);
 		hdsLib.checkAccount(stringPubEC);
 	}
 	
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void receiveAmountNullSourceKey() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
@@ -780,34 +717,34 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 60;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		AccountState state = hdsLib.checkAccount(keyhash2);
 		
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC2);
-		hdsLib.receiveAmount(null, keyhash2, id, byteTimestamp3, sigReceiveAmount);
+		hdsLib.receiveAmount(null, keyhash2, id, timestamp3, sigReceiveAmount);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void receiveAmountEmptySourceKey() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
@@ -815,34 +752,34 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 60;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		AccountState state = hdsLib.checkAccount(keyhash2);
 		
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC2);
-		hdsLib.receiveAmount("", keyhash2, id, byteTimestamp3, sigReceiveAmount);
+		hdsLib.receiveAmount("", keyhash2, id, timestamp3, sigReceiveAmount);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void receiveAmountBlankSourceKey() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
@@ -850,34 +787,34 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 60;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		AccountState state = hdsLib.checkAccount(keyhash2);
 		
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC2);
-		hdsLib.receiveAmount("    ", keyhash2, id, byteTimestamp3, sigReceiveAmount);
+		hdsLib.receiveAmount("    ", keyhash2, id, timestamp3, sigReceiveAmount);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void receiveAmountNullDestKey() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
@@ -885,34 +822,34 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 60;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		AccountState state = hdsLib.checkAccount(keyhash2);
 		
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC2);
-		hdsLib.receiveAmount(keyhash1, null, id, byteTimestamp3, sigReceiveAmount);
+		hdsLib.receiveAmount(keyhash1, null, id, timestamp3, sigReceiveAmount);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void receiveAmountEmptyDestKey() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
@@ -920,34 +857,34 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 60;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		AccountState state = hdsLib.checkAccount(keyhash2);
 		
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC2);
-		hdsLib.receiveAmount(keyhash1, "", id, byteTimestamp3, sigReceiveAmount);
+		hdsLib.receiveAmount(keyhash1, "", id, timestamp3, sigReceiveAmount);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void receiveAmountBlankDestKey() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
@@ -955,65 +892,65 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 60;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		AccountState state = hdsLib.checkAccount(keyhash2);
 		
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC2);
-		hdsLib.receiveAmount(keyhash1, "    ", id, byteTimestamp3, sigReceiveAmount);
+		hdsLib.receiveAmount(keyhash1, "    ", id, timestamp3, sigReceiveAmount);
 	}
 
 	@Test(expected = TransactionNotFoundException.class)
-	public void receiveAmountIDnotFound() throws Exception{
+	public void receiveAmountIdNotFound() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		String stringPubEC2 = HDSCrypto.publicKeyToString(pubEC2);
 		String keyhash1 = hashKey(stringPubEC1);
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 60;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		
 		int id = 1000;	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC2);
-		hdsLib.receiveAmount(keyhash1, keyhash2, id, byteTimestamp3, sigReceiveAmount);
+		hdsLib.receiveAmount(keyhash1, keyhash2, id, timestamp3, sigReceiveAmount);
 	}
 
 	@Test(expected = AccountNotFoundException.class)
@@ -1024,31 +961,31 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 60;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		AccountState state = hdsLib.checkAccount(keyhash2);
 		
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC2);
-		hdsLib.receiveAmount(stringPubEC1, keyhash2, id, byteTimestamp3, sigReceiveAmount);
+		hdsLib.receiveAmount(stringPubEC1, keyhash2, id, timestamp3, sigReceiveAmount);
 	}
 
 	@Test(expected = AccountNotFoundException.class)
@@ -1059,31 +996,31 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 60;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		AccountState state = hdsLib.checkAccount(keyhash2);
 		
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC2);
-		hdsLib.receiveAmount(keyhash1, stringPubEC2, id, byteTimestamp3, sigReceiveAmount);
+		hdsLib.receiveAmount(keyhash1, stringPubEC2, id, timestamp3, sigReceiveAmount);
 	}
 
 	@Test(expected = TransactionWrongKeyException.class)
@@ -1096,33 +1033,33 @@ public class HDSLibTest {
 		String keyhash3 = hashKey(stringPubEC3);
 		int amount = 60;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		byte[] sig3 = HDSCrypto.createSignatureEC(byteTimestamp, privEC3);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
-		hdsLib.register(stringPubEC3, sig3, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		byte[] sig3 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC3);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
+		hdsLib.register(stringPubEC3, timestamp, sig3);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		AccountState state = hdsLib.checkAccount(keyhash2);
 		
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC2);
-		hdsLib.receiveAmount(keyhash3, keyhash2, id, byteTimestamp3, sigReceiveAmount);
+		hdsLib.receiveAmount(keyhash3, keyhash2, id, timestamp3, sigReceiveAmount);
 	}
 
 	@Test(expected = TransactionWrongKeyException.class)
@@ -1135,33 +1072,33 @@ public class HDSLibTest {
 		String keyhash3 = hashKey(stringPubEC3);
 		int amount = 60;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		byte[] sig3 = HDSCrypto.createSignatureEC(byteTimestamp, privEC3);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
-		hdsLib.register(stringPubEC3, sig3, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		byte[] sig3 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC3);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
+		hdsLib.register(stringPubEC3, timestamp, sig3);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		AccountState state = hdsLib.checkAccount(keyhash2);
 		
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC3);
-		hdsLib.receiveAmount(keyhash1, keyhash3, id, byteTimestamp3, sigReceiveAmount);
+		hdsLib.receiveAmount(keyhash1, keyhash3, id, timestamp3, sigReceiveAmount);
 	}
 
 	@Test(expected = TimestampNotFreshException.class)
@@ -1172,34 +1109,34 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 60;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		AccountState state = hdsLib.checkAccount(keyhash2);
 		
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
 		Calendar c = Calendar.getInstance();
 		c.setTime(new Date());
 		c.add(Calendar.DATE, 2);
 		Date timestamp3 = c.getTime();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC2);
-		hdsLib.receiveAmount(keyhash1, keyhash2, id, byteTimestamp3, sigReceiveAmount);
+		hdsLib.receiveAmount(keyhash1, keyhash2, id, timestamp3, sigReceiveAmount);
 	}
 
 	@Test(expected = InvalidSignatureException.class)
@@ -1210,69 +1147,65 @@ public class HDSLibTest {
 		String keyhash2 = hashKey(stringPubEC2);
 		int amount = 60;
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		byte[] sig2 = HDSCrypto.createSignatureEC(byteTimestamp, privEC2);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);
-		hdsLib.register(stringPubEC2, sig2, byteTimestamp);
+		Date timestamp = new Date();
+		 
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		byte[] sig2 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC2);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
+		hdsLib.register(stringPubEC2, timestamp, sig2);
 		
-		byte[] keyhashs = HDSCrypto.concacBytes(keyhash1.getBytes(), keyhash2.getBytes());
-		byte[] hashAmount = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
-		Date timestamp2 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp2 = HDSCrypto.convertDateToByteArray(timestamp2);
-		byte[] content = HDSCrypto.concacBytes(hashAmount, byteTimestamp2);
+		byte[] keyhashs = HDSCrypto.concatBytes(keyhash1.getBytes(), keyhash2.getBytes());
+		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(amount).toByteArray());
+		Date timestamp2 = new Date();
+		 
+		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp2).getBytes());
 		
 		byte[] sigSendAmount = HDSCrypto.createSignatureEC(content, privEC1);
-		hdsLib.sendAmount(keyhash1, keyhash2, amount, byteTimestamp2, sigSendAmount);
+		hdsLib.sendAmount(keyhash1, keyhash2, amount, timestamp2, sigSendAmount);
 		AccountState state = hdsLib.checkAccount(keyhash2);
 		
 		Calendar c = Calendar.getInstance();
 		c.setTime(new Date());
 		c.add(Calendar.SECOND, 2);
 		Date changeTimestamp = c.getTime();
-		byte[] changeByteTimestamp = HDSCrypto.convertDateToByteArray(changeTimestamp);
 		
 		int id = state.getPendingTransactions().get(0).getId();	
-		byte[] hashID = HDSCrypto.concacBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		Date timestamp3 = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp3 = HDSCrypto.convertDateToByteArray(timestamp3);
-		byte[] content2 = HDSCrypto.concacBytes(hashID, byteTimestamp3);
+		byte[] hashID = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
+		Date timestamp3 = new Date();
+		 
+		byte[] content2 = HDSCrypto.concatBytes(hashID, HDSCrypto.dateToString(timestamp3).getBytes());
 		
 		byte[] sigReceiveAmount = HDSCrypto.createSignatureEC(content2, privEC2);
-		hdsLib.receiveAmount(keyhash1, keyhash2, id, changeByteTimestamp, sigReceiveAmount);
+		hdsLib.receiveAmount(keyhash1, keyhash2, id, changeTimestamp, sigReceiveAmount);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void auditNullKey() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);		
+		Date timestamp = new Date();
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
 		hdsLib.audit(null);
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void auditEmptyKey() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);		
+		Date timestamp = new Date();
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
 		hdsLib.audit("");
 	}
 
-	@Test(expected = ArgumentsException.class)
+	@Test(expected = NullArgumentException.class)
 	public void auditBlankKey() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);		
+		Date timestamp = new Date();
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
 		hdsLib.audit("    ");
 	}
 
@@ -1280,10 +1213,9 @@ public class HDSLibTest {
 	public void auditWrongKey() throws Exception{
 		String stringPubEC1 = HDSCrypto.publicKeyToString(pubEC1);
 		
-		Date timestamp = HDSCrypto.createTimestamp();
-		byte[] byteTimestamp = HDSCrypto.convertDateToByteArray(timestamp);
-		byte[] sig1 = HDSCrypto.createSignatureEC(byteTimestamp, privEC1);
-		hdsLib.register(stringPubEC1, sig1, byteTimestamp);		
+		Date timestamp = new Date();
+		byte[] sig1 = HDSCrypto. createSignatureEC(HDSCrypto.dateToString(timestamp).getBytes(), privEC1);
+		hdsLib.register(stringPubEC1, timestamp, sig1);
 		hdsLib.audit(stringPubEC1);
 	}
 }
