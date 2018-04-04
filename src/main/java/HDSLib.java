@@ -73,7 +73,7 @@ public class HDSLib {
         }
     }
 
-    public void register(String key, Date timestamp, byte[] sig) throws KeyAlreadyRegistered, InvalidKeySpecException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException {
+    public Account register(String key, Date timestamp, byte[] sig) throws KeyAlreadyRegistered, InvalidKeySpecException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException {
         try {
 			Date timeReceived = new Date();
 
@@ -96,6 +96,7 @@ public class HDSLib {
             }
             
             accounts.create(account);
+            return account;
         } catch (SQLException e) {
             e.printStackTrace();
         } catch (InvalidKeyException e) {
@@ -105,9 +106,10 @@ public class HDSLib {
 		} catch (SignatureException e) {
 			e.printStackTrace();
 		}
+		return null;
     }
 
-    public void sendAmount(String sourceKey, String destKey, int amount, Date timestamp, byte[] sig) throws AccountNotFoundException, AccountInsufficientAmountException, InvalidKeyException, NoSuchAlgorithmException, SignatureException, InvalidKeySpecException, TimestampNotFreshException, InvalidSignatureException, ParseException, NullArgumentException, InvalidAmountException, SameSourceAndDestAccountException {
+    public Transaction sendAmount(String sourceKey, String destKey, int amount, Date timestamp, byte[] sig) throws AccountNotFoundException, AccountInsufficientAmountException, InvalidKeyException, NoSuchAlgorithmException, SignatureException, InvalidKeySpecException, TimestampNotFreshException, InvalidSignatureException, ParseException, NullArgumentException, InvalidAmountException, SameSourceAndDestAccountException {
 		Date timeReceived = new Date();
 
     	checkNullKey(sourceKey);
@@ -149,9 +151,11 @@ public class HDSLib {
         try {
             transactions.create(transaction);
             accounts.update(sourceAccount);
+            return transaction;
         } catch (SQLException e) {
             e.printStackTrace();
         }
+        return null;
     }
 
     public AccountState checkAccount(String key) throws AccountNotFoundException, NullArgumentException {
@@ -170,7 +174,7 @@ public class HDSLib {
         return new AccountState(account.getKey(), account.getAmount(), pendingIncomingTransactions);
     }
 
-    public void receiveAmount(String sourceKey, String destKey, int id, Date timestamp, byte[] sig) throws AccountNotFoundException, TransactionNotFoundException, AccountInsufficientAmountException, InvalidKeyException, NoSuchAlgorithmException, SignatureException, InvalidKeySpecException, TimestampNotFreshException, TransactionWrongKeyException, InvalidSignatureException, ParseException, NullArgumentException {
+    public Transaction receiveAmount(String sourceKey, String destKey, int id, Date timestamp, byte[] sig) throws AccountNotFoundException, TransactionNotFoundException, AccountInsufficientAmountException, InvalidKeyException, NoSuchAlgorithmException, SignatureException, InvalidKeySpecException, TimestampNotFreshException, TransactionWrongKeyException, InvalidSignatureException, ParseException, NullArgumentException {
     	// TODO: Don't need sourceKey and destKey
     	Date timeReceived = new Date();
     	checkNullKey(sourceKey);
@@ -217,9 +221,11 @@ public class HDSLib {
         try {
             transactions.update(transaction);
             accounts.update(destAccount);
+            return transaction;
         } catch (SQLException e) {
             e.printStackTrace();
         }
+        return null;
     }
 
     public ForeignCollection<Transaction> audit(String key) throws AccountNotFoundException, NullArgumentException {
