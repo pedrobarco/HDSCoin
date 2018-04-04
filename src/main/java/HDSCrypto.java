@@ -32,12 +32,12 @@ public class HDSCrypto {
     }
 	
 	public static byte[] digestByteMessage(String message) throws NoSuchAlgorithmException{
-		MessageDigest md = MessageDigest.getInstance("SHA-384");//384 para simetrica e 512 para assimetrica?
+		MessageDigest md = MessageDigest.getInstance("SHA-384");
 		return md.digest(message.getBytes());		
 	}
 
 	public static String digestStringMessage(String message) throws NoSuchAlgorithmException{
-		MessageDigest md = MessageDigest.getInstance("SHA-384");//384 para simetrica e 512 para assimetrica?
+		MessageDigest md = MessageDigest.getInstance("SHA-384");
 		return getEncoder().encodeToString(md.digest(message.getBytes()));
 	}
 	
@@ -57,7 +57,7 @@ public class HDSCrypto {
 	}
 	
 	public static byte[] createSignatureEC(byte[] data, PrivateKey priv) throws InvalidKeyException, NoSuchAlgorithmException, SignatureException{
-		Signature s = Signature.getInstance("SHA1withECDSA");
+		Signature s = Signature.getInstance("SHA256withECDSA");
 		s.initSign(priv);
 		s.update(data);
 		byte[] signature = s.sign();
@@ -65,7 +65,7 @@ public class HDSCrypto {
 	}
 	
 	public static boolean verifySignature(byte[] data, PublicKey pub, byte[] sig) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException{
-		Signature s = Signature.getInstance("SHA1withECDSA");
+		Signature s = Signature.getInstance("SHA256withECDSA");
 		s.initVerify(pub);
 		s.update(data);
 		return s.verify(sig);  
@@ -93,8 +93,7 @@ public class HDSCrypto {
 	public static String privateKeyToString(PrivateKey key){
 		return new String(Base64.getEncoder().encode(key.getEncoded()));
 	}
-
-	// TODO: porque nao sei se a convercao de string para private EC é assim tao simples 
+ 
 	public static PrivateKey stringToPrivateKey(String key) throws InvalidKeySpecException {
 		PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(Base64.getDecoder().decode(key));
 		try {
