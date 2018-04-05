@@ -24,8 +24,6 @@ public class ReceiveAmountTest {
 	private static PrivateKey privKey1;
 	private static PublicKey pubKey2;
 	private static PrivateKey privKey2;
-	private static PublicKey pubKey3;
-	private static PrivateKey privKey3;
 
 	@BeforeClass
 	public static void setUpAll() {
@@ -49,10 +47,6 @@ public class ReceiveAmountTest {
 		ec = keyGen.generateKeyPair();
 		pubKey2 = ec.getPublic();
 		privKey2 = ec.getPrivate();
-
-		ec = keyGen.generateKeyPair();
-		pubKey3 = ec.getPublic();
-		privKey3 = ec.getPrivate();
 	}
 
 	@Before
@@ -69,7 +63,7 @@ public class ReceiveAmountTest {
 
 	@Test
 	public void receiveSuccess() throws Exception {
-		String a1Hash = TestAux.registerHelper(pubKey1, privKey1, hdsLib).getKeyHash();
+		TestAux.registerHelper(pubKey1, privKey1, hdsLib).getKeyHash();
 		String a2Hash = TestAux.registerHelper(pubKey2, privKey2, hdsLib).getKeyHash();
 
 		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, privKey1, hdsLib);
