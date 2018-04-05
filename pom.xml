@@ -16,9 +16,26 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>1.6.0</version>
-                <configuration>
-                    <mainClass>Main</mainClass>
-                </configuration>
+                <executions>
+                    <execution>
+                        <id>client</id>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>Client</mainClass>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>app</id>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>Application</mainClass>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
