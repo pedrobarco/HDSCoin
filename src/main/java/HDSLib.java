@@ -185,7 +185,7 @@ public class HDSLib {
         	throw new TimestampNotFreshException("Timestamp not fresh");
 		}
 
-		Account sourceAccount = transaction.getFrom();
+		//Account sourceAccount = transaction.getFrom();
 		Account destAccount = transaction.getTo();
 		try {
 			accounts.refresh(destAccount);

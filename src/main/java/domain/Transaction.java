@@ -5,9 +5,11 @@ import com.j256.ormlite.table.DatabaseTable;
 
 import java.io.Serializable;
 
+@SuppressWarnings("serial")
 @DatabaseTable(tableName = "transactions")
 public class Transaction implements Serializable{
-    @DatabaseField(generatedId=true)
+
+	@DatabaseField(generatedId=true)
     private int id;
     @DatabaseField(foreign = true, foreignAutoRefresh = true)
     private Account from;

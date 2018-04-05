@@ -3,9 +3,10 @@ package domain;
 import java.io.Serializable;
 import java.util.List;
 
+@SuppressWarnings("serial")
 public class AccountState implements Serializable{
 
-    private String keyHash;
+	private String keyHash;
     private int amount;
     private List<Transaction> pendingTransactions;
 
@@ -20,7 +21,7 @@ public class AccountState implements Serializable{
     }
 
     public void setKeyhash(String key) {
-        this.keyHash = keyHash;
+        this.keyHash = key;
     }
 
     public int getAmount() {

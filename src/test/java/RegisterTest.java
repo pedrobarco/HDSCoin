@@ -23,8 +23,6 @@ public class RegisterTest {
 	private static PrivateKey privKey1;
 	private static PublicKey pubKey2;
 	private static PrivateKey privKey2;
-	private static PublicKey pubKey3;
-	private static PrivateKey privKey3;
 
 	@BeforeClass
 	public static void setUpAll() {
@@ -48,10 +46,6 @@ public class RegisterTest {
 		ec = keyGen.generateKeyPair();
 		pubKey2 = ec.getPublic();
 		privKey2 = ec.getPrivate();
-
-		ec = keyGen.generateKeyPair();
-		pubKey3 = ec.getPublic();
-		privKey3 = ec.getPrivate();
 	}
 
 	@Before
