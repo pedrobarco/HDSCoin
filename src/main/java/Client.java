@@ -10,6 +10,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Paths;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
@@ -21,7 +22,7 @@ import java.util.Date;
 import java.util.Scanner;
 
 public class Client {
-	public static boolean debug = true;
+	public static boolean debug = false;
 	public static String server;
 	public static void main(String[] args) {
 		Scanner scanner = new Scanner(System.in);
@@ -126,10 +127,15 @@ public class Client {
 			byte[] pubkeyBytes = Files.readAllBytes(Paths.get(pubkeyFile));
 			X509EncodedKeySpec pubSpec = new X509EncodedKeySpec(pubkeyBytes);
 			publicKey = factory.generatePublic(pubSpec);
+		} catch (NoSuchFileException e){
+			System.out.println("[ERROR] Couldn't find file: " + privkeyFile);
+			return;
 		} catch (IOException e) {
 			e.printStackTrace();
+			return;
 		} catch (InvalidKeySpecException | NoSuchAlgorithmException | NoSuchProviderException e) {
 			e.printStackTrace();
+			return;
 		}
 
 		String publicKeyString = new String(Base64.getEncoder().encode(publicKey.getEncoded()));
@@ -193,10 +199,15 @@ public class Client {
 			PKCS8EncodedKeySpec privSpec = new PKCS8EncodedKeySpec(privkeyBytes);
 			KeyFactory factory = KeyFactory.getInstance("EC", "SunEC");
 			privateKey = factory.generatePrivate(privSpec);
+		} catch (NoSuchFileException e){
+			System.out.println("[ERROR] Couldn't find file: " + privkeyFile);
+			return;
 		} catch (IOException e) {
 			e.printStackTrace();
+			return;
 		} catch (InvalidKeySpecException | NoSuchAlgorithmException | NoSuchProviderException e) {
 			e.printStackTrace();
+			return;
 		}
 
 		String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
@@ -266,10 +277,15 @@ public class Client {
 			PKCS8EncodedKeySpec privSpec = new PKCS8EncodedKeySpec(privkeyBytes);
 			KeyFactory factory = KeyFactory.getInstance("EC", "SunEC");
 			privateKey = factory.generatePrivate(privSpec);
+		} catch (NoSuchFileException e){
+			System.out.println("[ERROR] Couldn't find file: " + privkeyFile);
+			return;
 		} catch (IOException e) {
 			e.printStackTrace();
+			return;
 		} catch (InvalidKeySpecException | NoSuchAlgorithmException | NoSuchProviderException e) {
 			e.printStackTrace();
+			return;
 		}
 
 		String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
@@ -500,11 +516,11 @@ public class Client {
 
 	public static void printHelp(){
 		System.out.println("Commands:");
-		System.out.println("generate <key name> 													- Generates a public and private key");
-		System.out.println("register <path to public key file> <path to private key file> 			- Registers account on HDS with public key");
-		System.out.println("send <source hash> <destination hash> <amount> <path to private key> 	- Sends 'amount' coins from source to destination");
-		System.out.println("receive <transaction id> <path to private key> 							- Confirms reception of a transaction");
-		System.out.println("check <account hash>													- Checks balance and pending transactions");
-		System.out.println("audit <account hash>													- Lists all transactions from the account");
+		System.out.println("generate <key name> - Generates a public and private key");
+		System.out.println("register <path to public key file> <path to private key file> - Registers account on HDS with public key");
+		System.out.println("send <source hash> <destination hash> <amount> <path to private key> - Sends 'amount' coins from source to destination");
+		System.out.println("receive <transaction id> <path to private key> - Confirms reception of a transaction");
+		System.out.println("check <account hash> - Checks balance and pending transactions");
+		System.out.println("audit <account hash> - Lists all transactions from the account");
 	}
 }
