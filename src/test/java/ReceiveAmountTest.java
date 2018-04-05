@@ -1,21 +1,21 @@
 import domain.Account;
 import domain.Transaction;
 import exceptions.InvalidSignatureException;
-import exceptions.NullArgumentException;
 import exceptions.TimestampNotFreshException;
 import exceptions.TransactionNotFoundException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.*;
+import java.util.Calendar;
+import java.util.Date;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.*;
 
 public class ReceiveAmountTest {
 	private HDSLib hdsLib;
@@ -74,6 +74,13 @@ public class ReceiveAmountTest {
 
 		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, privKey1, hdsLib);
 		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey2, hdsLib);
+		Transaction doneTransaction = hdsLib.getTransaction(sentTransaction.getId());
+		assertNotNull(doneTransaction.getSenderSig());
+		assertNotNull(doneTransaction.getReceiverSig());
+		Signature s = HDSCrypto.verifySignature(pubKey2);
+		s.update(BigInteger.valueOf(doneTransaction.getId()).toByteArray());
+		s.update(HDSCrypto.dateToString(doneTransaction.getReceivedTimestamp()).getBytes());
+		assertTrue(s.verify(doneTransaction.getReceiverSig()));
 
 		Account a2 = hdsLib.getAccount(a2Hash);
 		assertEquals(150, a2.getAmount());
@@ -90,32 +97,34 @@ public class ReceiveAmountTest {
 	public void receiveAmountWrongKey() throws Exception{
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib).getKeyHash();
 		TestAux.registerHelper(pubKey2, privKey2, hdsLib).getKeyHash();
-
 		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, privKey1, hdsLib);
+
 		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey1, hdsLib);
 	}
 
 	@Test(expected = TimestampNotFreshException.class)
 	public void receiveAmountWrongTimestamp() throws Exception{
-		// TODO
-		throw new NotImplementedException();
+		TestAux.registerHelper(pubKey1, privKey1, hdsLib).getKeyHash();
+		TestAux.registerHelper(pubKey2, privKey2, hdsLib).getKeyHash();
+		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, privKey1, hdsLib);
+
+		Calendar c = Calendar.getInstance();
+		c.setTime(new Date());
+		c.add(Calendar.DATE, 2);
+		Date timestamp = c.getTime();
+		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey1, timestamp, hdsLib);
 	}
 
 	@Test(expected = InvalidSignatureException.class)
 	public void receiveAmountWrongSignature() throws Exception{
-		// TODO
-		throw new NotImplementedException();
-	}
+		TestAux.registerHelper(pubKey1, privKey1, hdsLib).getKeyHash();
+		TestAux.registerHelper(pubKey2, privKey2, hdsLib).getKeyHash();
+		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, privKey1, hdsLib);
 
-	@Test(expected = NullArgumentException.class)
-	public void receiveAmountNullSourceKey() throws Exception{
-		// TODO
-		throw new NotImplementedException();
-	}
-
-	@Test(expected = NullArgumentException.class)
-	public void receiveAmountNullDestKey() throws Exception{
-		// TODO
-		throw new NotImplementedException();
+		Date timestamp = new Date();
+		Signature s = HDSCrypto.createSignature(privKey1);
+		s.update(BigInteger.valueOf(sentTransaction.getId()+1).toByteArray());
+		s.update(HDSCrypto.dateToString(timestamp).getBytes());
+		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey1, timestamp, s.sign(), hdsLib);
 	}
 }

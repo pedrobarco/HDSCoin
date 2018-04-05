@@ -35,7 +35,7 @@ public class Application {
             }
         });
 
-        // Get Account TODO: If someone feels like making Account/Transaction serializable
+        // Get Account
         /*app.get("/hds/:key", ctx -> {
             String key = ctx.param("key");
             Account account = HDSLib.getInstance().getAccount(key);
@@ -76,7 +76,6 @@ public class Application {
 
         // Send Transaction
         app.post("/hds/:key/send", ctx -> {
-            // TODO: Probably best not to use path params
             String sourceKey = urlDecode(ctx.param("key"));
             String destKey = ctx.formParam("destKey");
             int amount = Integer.parseInt(Objects.requireNonNull(ctx.formParam("amount")));
@@ -105,6 +104,11 @@ public class Application {
                 ctx.status(201);
                 ctx.json(transaction);
             }
+        });
+
+        // Ping
+        app.get("/hds/ping", ctx -> {
+            ctx.status(200);
         });
     }
 

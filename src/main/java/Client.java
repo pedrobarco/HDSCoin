@@ -34,7 +34,13 @@ public class Client {
 		if (!server.startsWith("http://")) {
 			server = "http://"+server;
 		}
-		// TODO: Ping server, ask again if unavailable
+		while (!ping()) {
+			System.out.print("[ERROR] Server not responding, type server address again\n> ");
+			server = scanner.nextLine();
+			if (!server.startsWith("http://")) {
+				server = "http://"+server;
+			}
+		}
 		printHelp();
 		boolean running = true;
 
@@ -400,6 +406,22 @@ public class Client {
 			}
 		} catch (UnirestException e) {
 			e.printStackTrace();
+		}
+	}
+
+	public static boolean ping() {
+		if (debug) {
+			System.out.println("[DEBUG] Pinging Server");
+		}
+		try {
+			HttpResponse<String> jsonResponse = Unirest.get(server+"/hds/ping")
+					.asString();
+			if (debug) {
+				System.out.println("[DEBUG] Got " + jsonResponse.getStatus());
+			}
+			return jsonResponse.getStatus() == 200;
+		} catch (UnirestException e) {
+			return false;
 		}
 	}
 

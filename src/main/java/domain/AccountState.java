@@ -19,7 +19,7 @@ public class AccountState implements Serializable{
         return keyHash;
     }
 
-    public void setKeyhash(String key) {
+    public void setKeyhash(String keyHash) {
         this.keyHash = keyHash;
     }
 

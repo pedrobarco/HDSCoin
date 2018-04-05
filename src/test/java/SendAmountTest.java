@@ -5,11 +5,13 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.*;
+import java.util.Calendar;
+import java.util.Date;
 
 import static org.junit.Assert.*;
 
@@ -85,6 +87,15 @@ public class SendAmountTest {
 		assertEquals(pubHash2, transaction.getTo().getKeyHash());
 		assertTrue(transaction.isPending());
 
+		assertNull(transaction.getReceivedTimestamp());
+		assertNull(transaction.getReceiverSig());
+		Signature s = HDSCrypto.verifySignature(pubKey1);
+		s.update(transaction.getFrom().getKeyHash().getBytes());
+		s.update(transaction.getTo().getKeyHash().getBytes());
+		s.update(BigInteger.valueOf(transaction.getAmount()).toByteArray());
+		s.update(HDSCrypto.dateToString(transaction.getSentTimestamp()).getBytes());
+		assertTrue(s.verify(transaction.getSenderSig()));
+
 		Transaction newTransaction = TestAux.sendAmountHelper(pubKey2, pubKey3, 100, privKey2, hdsLib);
 		assertNotNull(newTransaction);
 		assertTrue(newTransaction.getId() > transaction.getId());
@@ -129,10 +140,19 @@ public class SendAmountTest {
 		TestAux.sendAmountHelper(pubKey1, pubKey2, 0, privKey1, hdsLib);
 	}
 
-	@Test
-	public void replayAttack() throws Exception{
-		// TODO
-		throw new NotImplementedException();
+	@Test(expected = RepeatedTransactionException.class)
+	public void sendAmountReplayAttack() throws Exception{
+		TestAux.registerHelper(pubKey1, privKey1, hdsLib);
+		TestAux.registerHelper(pubKey2, privKey2, hdsLib);
+		Date timestamp = new Date();
+		Signature s = HDSCrypto.createSignature(privKey1);
+		s.update(TestAux.hashKey(pubKey1).getBytes());
+		s.update(TestAux.hashKey(pubKey2).getBytes());
+		s.update(BigInteger.valueOf(30).toByteArray());
+		s.update(HDSCrypto.dateToString(timestamp).getBytes());
+		byte[] sig = s.sign();
+		TestAux.sendAmountHelper(pubKey1, pubKey2, 30, privKey1, timestamp, sig, hdsLib);
+		TestAux.sendAmountHelper(pubKey1, pubKey2, 30, privKey1, timestamp, sig, hdsLib);
 	}
 
 	@Test(expected = InvalidSignatureException.class)
@@ -144,43 +164,28 @@ public class SendAmountTest {
 
 	@Test(expected = TimestampNotFreshException.class)
 	public void sendAmountWrongTimestamp() throws Exception{
-		/*
+		TestAux.registerHelper(pubKey1, privKey1, hdsLib);
+		TestAux.registerHelper(pubKey2, privKey2, hdsLib);
 		Calendar c = Calendar.getInstance();
 		c.setTime(new Date());
 		c.add(Calendar.DATE, 2);
-		Date timestamp2 = c.getTime();
-		*/
-		// TODO
-		throw new NotImplementedException();
+		Date timestamp = c.getTime();
+
+		TestAux.sendAmountHelper(pubKey1, pubKey2, 30, privKey1, timestamp, hdsLib);
 	}
 
 	@Test(expected = InvalidSignatureException.class)
 	public void sendAmountWrongSig() throws Exception{
-		// TODO
-		throw new NotImplementedException();
-	}
+		int amount = 50;
+		TestAux.registerHelper(pubKey1, privKey1, hdsLib);
+		TestAux.registerHelper(pubKey2, privKey2, hdsLib);
+		Date timestamp = new Date();
+		Signature s = HDSCrypto.createSignature(privKey1);
+		s.update(TestAux.hashKey(pubKey1).getBytes());
+		s.update(TestAux.hashKey(pubKey2).getBytes());
+		s.update(BigInteger.valueOf(amount+1).toByteArray());
+		s.update(HDSCrypto.dateToString(timestamp).getBytes());
 
-	@Test(expected = NullArgumentException.class)
-	public void sendAmountNullSourceKey() throws Exception{
-		// TODO
-		throw new NotImplementedException();
-	}
-
-	@Test(expected = NullArgumentException.class)
-	public void sendAmountNullDestinationKey() throws Exception{
-		// TODO
-		throw new NotImplementedException();
-	}
-
-	@Test(expected = NullArgumentException.class)
-	public void sendAmountNullTimestamp() throws Exception{
-		// TODO
-		throw new NotImplementedException();
-	}
-
-	@Test(expected = NullArgumentException.class)
-	public void sendAmountNullSig() throws Exception{
-		// TODO
-		throw new NotImplementedException();
+		TestAux.sendAmountHelper(pubKey1, pubKey2, amount, privKey1, timestamp, s.sign(), hdsLib);
 	}
 }

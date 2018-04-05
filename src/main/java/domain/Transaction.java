@@ -1,9 +1,11 @@
 package domain;
 
+import com.j256.ormlite.field.DataType;
 import com.j256.ormlite.field.DatabaseField;
 import com.j256.ormlite.table.DatabaseTable;
 
 import java.io.Serializable;
+import java.util.Date;
 
 @DatabaseTable(tableName = "transactions")
 public class Transaction implements Serializable{
@@ -17,24 +19,30 @@ public class Transaction implements Serializable{
     private int amount;
     @DatabaseField
     private boolean pending;
+    @DatabaseField(dataType = DataType.DATE)
+    private Date sentTimestamp;
+    @DatabaseField(dataType = DataType.DATE)
+    private Date receivedTimestamp;
+    @DatabaseField(dataType=DataType.BYTE_ARRAY)
+    private byte[] senderSig;
+    @DatabaseField(dataType=DataType.BYTE_ARRAY)
+    private byte[] receiverSig;
 
     public Transaction() {
 
     }
 
-    // TODO IMPORTANT!!! STORE SIGNATURE
-    public Transaction(Account from, Account to, int amount) {
-        this.from = from;
-        this.to = to;
-        this.amount = amount;
-        this.pending = true;
+    public Transaction(Account from, Account to, int amount, Date timestamp, byte[] sig) {
+        this(from, to, amount, timestamp, true, sig);
     }
 
-    public Transaction(Account from, Account to, int amount, boolean pending) {
+    public Transaction(Account from, Account to, int amount, Date timestamp, boolean pending, byte[] sig) {
         this.from = from;
         this.to = to;
         this.amount = amount;
         this.pending = pending;
+        this.sentTimestamp = timestamp;
+        this.senderSig = sig;
     }
 
     public Account getFrom() {
@@ -77,6 +85,44 @@ public class Transaction implements Serializable{
         this.pending = pending;
     }
 
+    public Date getSentTimestamp() {
+        return sentTimestamp;
+    }
+
+    public void setSentTimestamp(Date sentTimestamp) {
+        this.sentTimestamp = sentTimestamp;
+    }
+
+    public Date getReceivedTimestamp() {
+        return receivedTimestamp;
+    }
+
+    public void setReceivedTimestamp(Date receivedTimestamp) {
+        this.receivedTimestamp = receivedTimestamp;
+    }
+
+    public byte[] getSenderSig() {
+        return senderSig;
+    }
+
+    public void setSenderSig(byte[] senderSig) {
+        this.senderSig = senderSig;
+    }
+
+    public byte[] getReceiverSig() {
+        return receiverSig;
+    }
+
+    public void setReceiverSig(byte[] receiverSig) {
+        this.receiverSig = receiverSig;
+    }
+
+    public void complete(Date timestamp, byte[] sig){
+        this.pending = false;
+        this.receivedTimestamp = timestamp;
+        this.receiverSig = sig;
+    }
+
     @Override
     public String toString() {
         return "From: " + from.getKey() + "\nTo: " + to.getKey() + "\nAmount: " + amount;
@@ -108,5 +154,4 @@ public class Transaction implements Serializable{
         }
         return true;
     }
-
 }

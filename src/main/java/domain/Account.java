@@ -34,7 +34,7 @@ public class Account implements Serializable{
         this.key = key;
         this.amount = 100;
         try {
-            MessageDigest digester = MessageDigest.getInstance("SHA-256"); //TODO mais tarde mudar o SHA 512
+            MessageDigest digester = MessageDigest.getInstance("SHA-256");
             digester.update(key.getEncoded());
             keyHash = Base64.getEncoder().encodeToString(digester.digest());
         } catch (NoSuchAlgorithmException e) {
@@ -65,7 +65,7 @@ public class Account implements Serializable{
         this.key = key;
     }
 
-    /* TODO: transaction list only keeps sent transactions
+    /* FIXME: transaction list only keeps sent transactions
     public ForeignCollection<Transaction> getTransactions() {
         return transactions;
     }*/

@@ -102,7 +102,7 @@ public class HDSLib {
 		return null;
     }
 
-    public Transaction sendAmount(String sourceKeyHash, String destKeyHash, int amount, Date timestamp, byte[] sig) throws AccountNotFoundException, AccountInsufficientAmountException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException, InvalidAmountException, SameSourceAndDestAccountException, InvalidKeyException, SignatureException {
+    public Transaction sendAmount(String sourceKeyHash, String destKeyHash, int amount, Date timestamp, byte[] sig) throws AccountNotFoundException, AccountInsufficientAmountException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException, InvalidAmountException, SameSourceAndDestAccountException, InvalidKeyException, SignatureException, RepeatedTransactionException {
 		Date timeReceived = new Date();
 
 		checkNullKeyHash(sourceKeyHash);
@@ -138,11 +138,13 @@ public class HDSLib {
 		if(!s.verify(sig)){
 			throw new InvalidSignatureException("Signature not valid");
 		}
-		
-		//TODO: como verificar se a transaccao e unica?
-        
-        Transaction transaction = new Transaction(sourceAccount, destAccount, amount);
-        sourceAccount.addAmount(-amount);
+
+		if (getTransactionBySig(sig) != null) {
+			throw new RepeatedTransactionException();
+		}
+
+        Transaction transaction = new Transaction(sourceAccount, destAccount, amount, timestamp, sig);
+		sourceAccount.addAmount(-amount);
         try {
             transactions.create(transaction);
             accounts.update(sourceAccount);
@@ -201,7 +203,7 @@ public class HDSLib {
 		}
         
         destAccount.addAmount(transaction.getAmount());
-        transaction.setPending(false);
+        transaction.complete(timestamp, sig);
         try {
             transactions.update(transaction);
             accounts.update(destAccount);
@@ -246,6 +248,20 @@ public class HDSLib {
         }
         return transaction;
     }
+
+	public Transaction getTransactionBySig(byte[] sig) {
+		try {
+			List<Transaction> repeats = transactions.queryBuilder().where().eq("senderSig", sig).query();
+			if (repeats.size() == 0) {
+				return null;
+			} else {
+				return repeats.get(0);
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
 
     public List<Transaction> getAccountTransactions(String keyHash){
 		try {
