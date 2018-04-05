@@ -3,14 +3,16 @@ package domain;
 import com.j256.ormlite.field.DatabaseField;
 import com.j256.ormlite.table.DatabaseTable;
 
+import java.io.Serializable;
+
 @DatabaseTable(tableName = "transactions")
-public class Transaction {
+public class Transaction implements Serializable{
     @DatabaseField(generatedId=true)
-    public int id;
-    @DatabaseField(foreign = true)
+    private int id;
+    @DatabaseField(foreign = true, foreignAutoRefresh = true)
     private Account from;
-    @DatabaseField(foreign = true)
-    public Account to;
+    @DatabaseField(foreign = true, foreignAutoRefresh = true)
+    private Account to;
     @DatabaseField
     private int amount;
     @DatabaseField
@@ -20,6 +22,7 @@ public class Transaction {
 
     }
 
+    // TODO IMPORTANT!!! STORE SIGNATURE
     public Transaction(Account from, Account to, int amount) {
         this.from = from;
         this.to = to;
@@ -66,6 +69,10 @@ public class Transaction {
         return id;
     }
 
+    public boolean isPending(){
+        return this.pending;
+    }
+
     public void setPending(boolean pending) {
         this.pending = pending;
     }
@@ -74,4 +81,32 @@ public class Transaction {
     public String toString() {
         return "From: " + from.getKey() + "\nTo: " + to.getKey() + "\nAmount: " + amount;
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (!Transaction.class.isAssignableFrom(obj.getClass())) {
+            return false;
+        }
+        final Transaction other = (Transaction) obj;
+        if (this.id != other.id) {
+            return false;
+        }
+        if (this.from.getKeyHash() != other.from.getKeyHash()){
+            return false;
+        }
+        if (this.to.getKeyHash() != other.to.getKeyHash()){
+            return false;
+        }
+        if (this.amount != other.amount){
+            return false;
+        }
+        if (this.pending != other.pending){
+            return false;
+        }
+        return true;
+    }
+
 }

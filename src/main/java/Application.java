@@ -1,4 +1,3 @@
-import com.j256.ormlite.dao.ForeignCollection;
 import domain.Account;
 import domain.AccountState;
 import domain.Transaction;
@@ -6,6 +5,7 @@ import io.javalin.Javalin;
 
 import java.util.Base64;
 import java.util.Date;
+import java.util.List;
 import java.util.Objects;
 
 public class Application {
@@ -15,25 +15,28 @@ public class Application {
         app.exception(Exception.class, (e, ctx) -> {
             // handle general exceptions here
             // will not trigger if more specific exception-mapper found
+            e.printStackTrace();
             ctx.status(400);
-            ctx.result(e.getMessage());
+            ctx.json(e);
         });
 
+        // Register
         app.post("/hds/", ctx -> {
             String key = ctx.formParam("key");
             byte[] sig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("sig")));
-            Date timestamp = HDSCrypto.StringToDate(ctx.formParam("timestamp"));
-            Account account = HDSLib.getInstance().register(key, timestamp, sig);
+            Date timestamp = HDSCrypto.stringToDate(ctx.formParam("timestamp"));
+            Account account = HDSLib.getInstance().register(HDSCrypto.stringToPublicKey(key), timestamp, sig);
             if (account == null) {
                 ctx.status(500);
-                ctx.result("Error registering account.");
+                //ctx.result("Error registering account.");
             } else {
                 ctx.status(201);
-                ctx.json(account);
+                ctx.json(HDSLib.getInstance().checkAccount(account.getKeyHash()));
             }
         });
 
-        app.get("/hds/:key", ctx -> {
+        // Get Account TODO: If someone feels like making Account/Transaction serializable
+        /*app.get("/hds/:key", ctx -> {
             String key = ctx.param("key");
             Account account = HDSLib.getInstance().getAccount(key);
             if (account == null) {
@@ -43,23 +46,25 @@ public class Application {
                 ctx.status(200);
                 ctx.json(account);
             }
-        });
+        });*/
 
+        // Check Account
         app.get("/hds/:key/check", ctx -> {
-            String key = ctx.param("key");
+            String key = urlDecode(ctx.param("key"));
             AccountState accountState = HDSLib.getInstance().checkAccount(key);
             if (accountState == null) {
-                ctx.status(404);
-                ctx.result("Make sure you check a valid account/key.");
+                ctx.status(500);
+                ctx.result("Couldn't get account state.");
             } else {
                 ctx.status(200);
                 ctx.json(accountState);
             }
         });
 
+        // Audit
         app.get("/hds/:key/audit", ctx -> {
-            String key = ctx.param("key");
-            ForeignCollection<Transaction> transactions = HDSLib.getInstance().audit(key);
+            String key = urlDecode(ctx.param("key"));
+            List<Transaction> transactions = HDSLib.getInstance().audit(key);
             if (transactions == null) {
                 ctx.status(404);
                 ctx.result("Make sure you audit a valid account/key.");
@@ -69,12 +74,14 @@ public class Application {
             }
         });
 
+        // Send Transaction
         app.post("/hds/:key/send", ctx -> {
-            String sourceKey = ctx.param("key");
+            // TODO: Probably best not to use path params
+            String sourceKey = urlDecode(ctx.param("key"));
             String destKey = ctx.formParam("destKey");
             int amount = Integer.parseInt(Objects.requireNonNull(ctx.formParam("amount")));
             byte[] sig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("sig")));
-            Date timestamp = HDSCrypto.StringToDate(ctx.formParam("timestamp"));
+            Date timestamp = HDSCrypto.stringToDate(ctx.formParam("timestamp"));
             Transaction transaction = HDSLib.getInstance().sendAmount(sourceKey, destKey,  amount, timestamp, sig);
             if (transaction == null) {
                 ctx.status(500);
@@ -85,13 +92,12 @@ public class Application {
             }
         });
 
+        // Receive Transaction
         app.post("/hds/receive/:id", ctx -> {
-            String sourceKey = ctx.formParam("sourceKey");
-            String destKey = ctx.formParam("destKey");
             int id = Integer.parseInt(Objects.requireNonNull(ctx.param("id")));
             byte[] sig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("sig")));
-            Date timestamp = HDSCrypto.StringToDate(ctx.formParam("timestamp"));
-            Transaction transaction = HDSLib.getInstance().receiveAmount(sourceKey, destKey, id, timestamp, sig);
+            Date timestamp = HDSCrypto.stringToDate(ctx.formParam("timestamp"));
+            Transaction transaction = HDSLib.getInstance().receiveAmount(id, timestamp, sig);
             if (transaction == null) {
                 ctx.status(500);
                 ctx.result("Error confirming transaction.");
@@ -100,5 +106,9 @@ public class Application {
                 ctx.json(transaction);
             }
         });
+    }
+
+    private static String urlDecode(String encoded) {
+        return encoded.replace(".","+").replace("_","/").replace("-","=");
     }
 }

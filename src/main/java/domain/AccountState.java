@@ -1,25 +1,26 @@
 package domain;
 
+import java.io.Serializable;
 import java.util.List;
 
-public class AccountState {
+public class AccountState implements Serializable{
 
-    private String key;
+    private String keyHash;
     private int amount;
     private List<Transaction> pendingTransactions;
 
-    public AccountState(String key, int amount, List<Transaction> pendingTransactions) {
-        this.key = key;
+    public AccountState(String keyHash, int amount, List<Transaction> pendingTransactions) {
+        this.keyHash = keyHash;
         this.amount = amount;
         this.pendingTransactions = pendingTransactions;
     }
 
-    public String getKey() {
-        return key;
+    public String getKeyHash() {
+        return keyHash;
     }
 
-    public void setKey(String key) {
-        this.key = key;
+    public void setKeyhash(String key) {
+        this.keyHash = keyHash;
     }
 
     public int getAmount() {

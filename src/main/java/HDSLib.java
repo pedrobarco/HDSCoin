@@ -1,6 +1,5 @@
 import com.j256.ormlite.dao.Dao;
 import com.j256.ormlite.dao.DaoManager;
-import com.j256.ormlite.dao.ForeignCollection;
 import com.j256.ormlite.jdbc.JdbcConnectionSource;
 import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
@@ -10,13 +9,8 @@ import domain.Transaction;
 import exceptions.*;
 
 import java.math.BigInteger;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
-import java.security.SignatureException;
-import java.security.spec.InvalidKeySpecException;
+import java.security.*;
 import java.sql.SQLException;
-import java.text.ParseException;
 import java.util.Date;
 import java.util.List;
 
@@ -73,7 +67,7 @@ public class HDSLib {
         }
     }
 
-    public Account register(String key, Date timestamp, byte[] sig) throws KeyAlreadyRegistered, InvalidKeySpecException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException {
+    public Account register(PublicKey key, Date timestamp, byte[] sig) throws KeyAlreadyRegistered, TimestampNotFreshException, InvalidSignatureException, NullArgumentException {
         try {
 			Date timeReceived = new Date();
 
@@ -89,9 +83,9 @@ public class HDSLib {
             if (!HDSCrypto.validateTimestamp(timeReceived, timestamp)) {
             	throw new TimestampNotFreshException("Timestamp not fresh");
             }
-            
-            PublicKey pubKey = HDSCrypto.stringToPublicKey(key);
-            if(!HDSCrypto.verifySignature(HDSCrypto.dateToString(timestamp).getBytes(), pubKey, sig)){
+			Signature s = HDSCrypto.verifySignature(key);
+			s.update(HDSCrypto.dateToString(timestamp).getBytes());
+            if(!s.verify(sig)){
             	throw new InvalidSignatureException("Signature not valid");
             }
             
@@ -101,46 +95,47 @@ public class HDSLib {
             e.printStackTrace();
         } catch (InvalidKeyException e) {
 			e.printStackTrace();
-		} catch (NoSuchAlgorithmException e) {
-			e.printStackTrace();
-		} catch (SignatureException e) {
+		}
+		catch (SignatureException e) {
 			e.printStackTrace();
 		}
 		return null;
     }
 
-    public Transaction sendAmount(String sourceKey, String destKey, int amount, Date timestamp, byte[] sig) throws AccountNotFoundException, AccountInsufficientAmountException, InvalidKeyException, NoSuchAlgorithmException, SignatureException, InvalidKeySpecException, TimestampNotFreshException, InvalidSignatureException, ParseException, NullArgumentException, InvalidAmountException, SameSourceAndDestAccountException {
+    public Transaction sendAmount(String sourceKeyHash, String destKeyHash, int amount, Date timestamp, byte[] sig) throws AccountNotFoundException, AccountInsufficientAmountException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException, InvalidAmountException, SameSourceAndDestAccountException, InvalidKeyException, SignatureException {
 		Date timeReceived = new Date();
 
-    	checkNullKey(sourceKey);
-		checkNullKey(destKey);
+		checkNullKeyHash(sourceKeyHash);
+		checkNullKeyHash(destKeyHash);
 		checkNullTimestamp(timestamp);
 		checkNullSignature(sig);
 		if (amount <= 0) {
 			throw new InvalidAmountException();
 		}
     	
-    	Account sourceAccount = getAccount(sourceKey);
-        Account destAccount = getAccount(destKey);
+    	Account sourceAccount = getAccount(sourceKeyHash);
+        Account destAccount = getAccount(destKeyHash);
 
         if (sourceAccount == null) {
-        	throw new AccountNotFoundException("Source account not found!");
+        	throw new AccountNotFoundException("Source account not found: " + sourceKeyHash);
         } else if (destAccount == null) {
-            throw new AccountNotFoundException("Destination account not found!");
+            throw new AccountNotFoundException("Destination account not found: " + destKeyHash);
         } else if (sourceAccount.getAmount() < amount) {
-            throw new AccountInsufficientAmountException("There is not enough money in your account");
-        } else if (sourceKey.equals(destKey)) {
-	    	throw new SameSourceAndDestAccountException("Can not send money to yourself");
+            throw new AccountInsufficientAmountException();
+        } else if (sourceKeyHash.equals(destKeyHash)) {
+	    	throw new SameSourceAndDestAccountException();
 	    }
 
         if (!HDSCrypto.validateTimestamp(timeReceived, timestamp)) {
-        	throw new TimestampNotFreshException("Timestamp not fresh");
+        	throw new TimestampNotFreshException("Timestamp not fresh: " + timestamp);
 		}
-        
-        byte[] keyhashes = HDSCrypto.concatBytes(sourceKey.getBytes(), destKey.getBytes());
-		byte[] hashAmount = HDSCrypto.concatBytes(keyhashes, BigInteger.valueOf(amount).toByteArray());
-		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp).getBytes());
-		if(!HDSCrypto.verifySignature(content, HDSCrypto.stringToPublicKey(sourceAccount.getKey()), sig)){
+
+		Signature s = HDSCrypto.verifySignature(sourceAccount.getKey());
+		s.update(sourceKeyHash.getBytes());
+		s.update(destKeyHash.getBytes());
+		s.update(BigInteger.valueOf(amount).toByteArray());
+		s.update(HDSCrypto.dateToString(timestamp).getBytes());
+		if(!s.verify(sig)){
 			throw new InvalidSignatureException("Signature not valid");
 		}
 		
@@ -151,6 +146,7 @@ public class HDSLib {
         try {
             transactions.create(transaction);
             accounts.update(sourceAccount);
+			accounts.update(destAccount);
             return transaction;
         } catch (SQLException e) {
             e.printStackTrace();
@@ -158,61 +154,49 @@ public class HDSLib {
         return null;
     }
 
-    public AccountState checkAccount(String key) throws AccountNotFoundException, NullArgumentException {
-    	checkNullKey(key);
-    	Account account = getAccount(key);
+    public AccountState checkAccount(String keyHash) throws AccountNotFoundException, NullArgumentException {
+		checkNullKeyHash(keyHash);
+    	Account account = getAccount(keyHash);
         
         if (account == null) {
-            throw new AccountNotFoundException("Account not found!");
+            throw new AccountNotFoundException("Account not found: " + keyHash);
         }
         List<Transaction> pendingIncomingTransactions= null;
         try {
-            pendingIncomingTransactions = transactions.queryBuilder().where().eq("pending", true).and().eq("to_id",key).query();
+            pendingIncomingTransactions = transactions.queryBuilder().where().eq("pending", true).and().eq("to_id", keyHash).query();
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return new AccountState(account.getKey(), account.getAmount(), pendingIncomingTransactions);
+        return new AccountState(account.getKeyHash(), account.getAmount(), pendingIncomingTransactions);
     }
 
-    public Transaction receiveAmount(String sourceKey, String destKey, int id, Date timestamp, byte[] sig) throws AccountNotFoundException, TransactionNotFoundException, AccountInsufficientAmountException, InvalidKeyException, NoSuchAlgorithmException, SignatureException, InvalidKeySpecException, TimestampNotFreshException, TransactionWrongKeyException, InvalidSignatureException, ParseException, NullArgumentException {
-    	// TODO: Don't need sourceKey and destKey
+    public Transaction receiveAmount(int id, Date timestamp, byte[] sig) throws TransactionNotFoundException, AccountInsufficientAmountException, InvalidKeyException, SignatureException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException {
     	Date timeReceived = new Date();
-    	checkNullKey(sourceKey);
-		checkNullKey(destKey);
 		checkNullTimestamp(timestamp);
 		checkNullSignature(sig);
-    	
-    	Account sourceAccount = getAccount(sourceKey);
-        Account destAccount = getAccount(destKey);
-        
-        if (sourceAccount == null) {
-            throw new AccountNotFoundException("Source account not found!");
-        } else if (destAccount == null) {
-            throw new AccountNotFoundException("Destination account not found!");
-        }
         
         Transaction transaction = getTransaction(id);
         
         if (transaction == null) {
             throw new TransactionNotFoundException("Transaction not found");
-        } 
-        
-        if(!transaction.getFrom().getKeyHash().equals(sourceKey)){
-			throw new TransactionWrongKeyException("Wrong source transaction");
-		}
-		
-		if(!transaction.getTo().getKeyHash().equals(destKey)){
-			throw new TransactionWrongKeyException("Wrong destination transaction");
-		}
+        }
 
         if (!HDSCrypto.validateTimestamp(timeReceived, timestamp)) {
         	throw new TimestampNotFreshException("Timestamp not fresh");
 		}
-        
-        byte[] keyhashs = HDSCrypto.concatBytes(sourceKey.getBytes(), destKey.getBytes());
-		byte[] hashAmount = HDSCrypto.concatBytes(keyhashs, BigInteger.valueOf(id).toByteArray());
-		byte[] content = HDSCrypto.concatBytes(hashAmount, HDSCrypto.dateToString(timestamp).getBytes());
-		if(!HDSCrypto.verifySignature(content, HDSCrypto.stringToPublicKey(destAccount.getKey()), sig)){
+
+		Account sourceAccount = transaction.getFrom();
+		Account destAccount = transaction.getTo();
+		try {
+			accounts.refresh(destAccount);
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+
+		Signature s = HDSCrypto.verifySignature(destAccount.getKey());
+		s.update(BigInteger.valueOf(id).toByteArray());
+		s.update(HDSCrypto.dateToString(timestamp).getBytes());
+		if(!s.verify(sig)){
 			throw new InvalidSignatureException("Signature not valid");
 		}
         
@@ -228,25 +212,25 @@ public class HDSLib {
         return null;
     }
 
-    public ForeignCollection<Transaction> audit(String key) throws AccountNotFoundException, NullArgumentException {
-    	checkNullKey(key);
+    public List<Transaction> audit(String keyHash) throws AccountNotFoundException, NullArgumentException {
+		checkNullKeyHash(keyHash);
     	
     	Account account = null;
         try {
-            account = accounts.queryForId(key);
+            account = accounts.queryForId(keyHash);
         } catch (SQLException e) {
             e.printStackTrace();
         }
         if (account == null) {
-            throw new AccountNotFoundException("Account not found!");
+            throw new AccountNotFoundException("Account not found: " + keyHash);
         }
-        return account.getTransactions();
+        return getAccountTransactions(keyHash);
     }
 
-    public Account getAccount(String key) {
+    public Account getAccount(String keyHash) {
         Account account = null;
         try {
-            account = accounts.queryForId(key);
+            account = accounts.queryForId(keyHash);
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -263,9 +247,24 @@ public class HDSLib {
         return transaction;
     }
 
-	private void checkNullKey(String key) throws NullArgumentException {
+    public List<Transaction> getAccountTransactions(String keyHash){
+		try {
+			return transactions.queryBuilder().where().eq("from_id", keyHash).or().eq("to_id", keyHash).query();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	private void checkNullKeyHash(String key) throws NullArgumentException {
 		if (key == null || key.trim().equals("")) {
-			throw new NullArgumentException("Null or empty key");
+			throw new NullArgumentException("Null or empty key hash");
+		}
+	}
+
+	private void checkNullKey(Key key) throws NullArgumentException {
+		if (key == null) {
+			throw new NullArgumentException("Null key");
 		}
 	}
 

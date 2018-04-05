@@ -7,8 +7,6 @@ import java.text.SimpleDateFormat;
 import java.util.Base64;
 import java.util.Date;
 
-import static java.util.Base64.getEncoder;
-
 public class HDSCrypto {
 	
 	public static SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss");
@@ -18,57 +16,32 @@ public class HDSCrypto {
 		//Date sentDate = dateFormat.parse(time);
 		long diff = receivedDate.getTime() - timeSent.getTime();
 		long diffSeconds = diff / 1000;
-		if( diffSeconds < -5 || diffSeconds > 5 ){
+		if( diffSeconds < -60 || diffSeconds > 60 ){
 			return false;
 		}
 		return true;
 	}
 	
-	public static byte[] concatBytes(byte[] a, byte[] b){
-    	byte[] c = new byte[a.length + b.length];
-    	System.arraycopy(a, 0, c, 0, a.length);
-    	System.arraycopy(b, 0, c, a.length, b.length);
-    	return c;
-    }
-	
-	public static byte[] digestByteMessage(String message) throws NoSuchAlgorithmException{
-		MessageDigest md = MessageDigest.getInstance("SHA-384");
-		return md.digest(message.getBytes());		
-	}
-
-	public static String digestStringMessage(String message) throws NoSuchAlgorithmException{
-		MessageDigest md = MessageDigest.getInstance("SHA-384");
-		return getEncoder().encodeToString(md.digest(message.getBytes()));
-	}
-	
-	public static KeyPair generateKeypairEC(){
-		KeyPairGenerator keyGen = null;
-		SecureRandom random = null;
+	public static Signature createSignature(PrivateKey priv) throws InvalidKeyException{
+		Signature s = null;
 		try {
-			keyGen = KeyPairGenerator.getInstance("EC", "SunEC");
-			random = SecureRandom.getInstance("SHA1PRNG", "SUN");
+			s = Signature.getInstance("SHA256withECDSA");
 		} catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
-		} catch (NoSuchProviderException e) {
+		}
+		s.initSign(priv);
+		return s;
+	}
+	
+	public static Signature verifySignature(PublicKey pub) throws InvalidKeyException {
+		Signature s = null;
+		try {
+			s = Signature.getInstance("SHA256withECDSA");
+		} catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
 		}
-		keyGen.initialize(224, random);
-		return keyGen.generateKeyPair();
-	}
-	
-	public static byte[] createSignatureEC(byte[] data, PrivateKey priv) throws InvalidKeyException, NoSuchAlgorithmException, SignatureException{
-		Signature s = Signature.getInstance("SHA256withECDSA");
-		s.initSign(priv);
-		s.update(data);
-		byte[] signature = s.sign();
-		return signature;
-	}
-	
-	public static boolean verifySignature(byte[] data, PublicKey pub, byte[] sig) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException{
-		Signature s = Signature.getInstance("SHA256withECDSA");
 		s.initVerify(pub);
-		s.update(data);
-		return s.verify(sig);  
+		return s;
 	}
 	
 	
@@ -76,7 +49,7 @@ public class HDSCrypto {
 		return new String(Base64.getEncoder().encode(key.getEncoded()));
 	}
 
-	public static PublicKey stringToPublicKey(String key) throws InvalidKeySpecException {
+	public static PublicKey stringToPublicKey(String key) {
 		X509EncodedKeySpec keySpec = new X509EncodedKeySpec(Base64.getDecoder().decode(key));
 		try {
 			KeyFactory keyFactory = KeyFactory.getInstance("EC", "SunEC");
@@ -84,7 +57,8 @@ public class HDSCrypto {
 		} catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
 		} catch (NoSuchProviderException e) {
-			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InvalidKeySpecException e) {
 			e.printStackTrace();
 		}
 		return null;
@@ -105,11 +79,7 @@ public class HDSCrypto {
 		return null;
 	}
 
-	public static String getCurrentTimestamp() {		
-		return dateFormat.format(new Date());
-	}
-
-	public static Date StringToDate(String timestamp) {
+	public static Date stringToDate(String timestamp) {
 		try {
 			return dateFormat.parse(timestamp);
 		} catch (ParseException e) {
@@ -121,17 +91,4 @@ public class HDSCrypto {
 	public static String dateToString(Date timestamp) {
 		return dateFormat.format(timestamp);
 	}
-	
-	/*public static byte[] convertDateToByteArray(Date time){
-		Long newTime = new Long(time.getTime());
-		return newTime.toString().getBytes();
-	}
-	
-	public static Date convertByteArrayToDate(byte[] byteTime){
-		return new Date(Long.valueOf(new String(byteTime)).longValue());
-	}
-	
-	public static Date createTimestamp(){
-		return timestampToDate(getCurrentTimestamp());
-	}*/
 }
