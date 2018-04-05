@@ -13,9 +13,11 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.util.Base64;
 
+@SuppressWarnings("serial")
 @DatabaseTable(tableName = "accounts")
 public class Account implements Serializable{
-    @DatabaseField(id=true)
+
+	@DatabaseField(id=true)
     private String keyHash;
     @JsonIgnore
     @DatabaseField(dataType = DataType.SERIALIZABLE)
