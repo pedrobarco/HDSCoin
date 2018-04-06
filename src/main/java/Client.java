@@ -4,6 +4,7 @@ import com.mashape.unirest.http.JsonNode;
 import com.mashape.unirest.http.Unirest;
 import com.mashape.unirest.http.exceptions.UnirestException;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.FileOutputStream;
@@ -22,25 +23,20 @@ import java.util.Date;
 import java.util.Scanner;
 
 public class Client {
-	public static boolean debug = false;
+	public static boolean debug = true;
 	public static String server;
+	public static PublicKey serverKey;
+
 	public static void main(String[] args) {
 		Scanner scanner = new Scanner(System.in);
 
 		System.out.println("----------------------------");
 		System.out.println("|     HDS Coin Client      |");
 		System.out.println("----------------------------");
-		System.out.print("Server address?\n> ");
-		server = scanner.nextLine();
-		if (!server.startsWith("http://")) {
-			server = "http://"+server;
-		}
-		while (!ping()) {
-			System.out.print("[ERROR] Server not responding, type server address again\n> ");
-			server = scanner.nextLine();
-			if (!server.startsWith("http://")) {
-				server = "http://"+server;
-			}
+		System.out.print("Server address and Server key?\n> ");
+		String[] serverinfo = scanner.nextLine().split(" ");
+		while (!connect(serverinfo)) {
+			serverinfo = scanner.nextLine().split(" ");
 		}
 		printHelp();
 		boolean running = true;
@@ -115,6 +111,39 @@ public class Client {
 		scanner.close();
 	}
 
+	public static boolean connect(String[] cmd){
+		if (cmd.length != 2) {
+			System.out.print("Please type in server address and the path to the server's public key (e.g: localhost:8080 server.pub)\n> ");
+			return false;
+		}
+		String address = cmd[0];
+		String serverKeyFile = cmd[1];
+		if (!address.startsWith("http://")) {
+			address = "http://"+address;
+		}
+		server = address;
+		try {
+			byte[] pubkeyBytes = Files.readAllBytes(Paths.get(serverKeyFile));
+			X509EncodedKeySpec pubSpec = new X509EncodedKeySpec(pubkeyBytes);
+			KeyFactory factory = KeyFactory.getInstance("EC", "SunEC");
+			serverKey = factory.generatePublic(pubSpec);
+		} catch (NoSuchFileException e){
+			System.out.println("[ERROR] Couldn't find file: " + serverKeyFile);
+			return false;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return false;
+		} catch (InvalidKeySpecException | NoSuchAlgorithmException | NoSuchProviderException e) {
+			e.printStackTrace();
+			return false;
+		}
+		if (!ping(server)) {
+			System.out.print("[ERROR] Server not responding, type server address again\n> ");
+			return false;
+		}
+		return true;
+	}
+
 	public static void register(String pubkeyFile, String privkeyFile) {
 		PrivateKey privateKey = null;
 		PublicKey publicKey = null;
@@ -128,7 +157,7 @@ public class Client {
 			X509EncodedKeySpec pubSpec = new X509EncodedKeySpec(pubkeyBytes);
 			publicKey = factory.generatePublic(pubSpec);
 		} catch (NoSuchFileException e){
-			System.out.println("[ERROR] Couldn't find file: " + privkeyFile);
+			System.out.println("[ERROR] Couldn't find file: " + privkeyFile + " or " + pubkeyFile);
 			return;
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -171,20 +200,23 @@ public class Client {
 					.field("sig", encodedSig)
 					.asJson();
 
+			if (debug) {
+				System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
+			}
+
+			if (!checkServerSignature(jsonResponse.getBody(), timestamp)) {
+				System.out.println("[ERROR] Could not verify the server's signature");
+				return;
+			}
+
 			if (jsonResponse.getStatus() == 400){
 				System.out.println("[ERROR] " + jsonResponse.getBody().getObject().get("message"));
 				return;
 			}
 			else if (jsonResponse.getStatus() == 201) {
-				if (debug) {
-					prettyPrintJsonString(jsonResponse.getBody());
-				}
 				System.out.println("Registered successfully! Your hash: " + jsonResponse.getBody().getObject().get("keyHash"));
 			}
 			else {
-				if (debug) {
-					prettyPrintJsonString(jsonResponse.getBody());
-				}
 				System.out.println("[ERROR] Unexpected status code: " + jsonResponse.getStatus());
 			}
 		} catch (UnirestException e) {
@@ -249,20 +281,23 @@ public class Client {
 					.field("sig", encodedSig)
 					.asJson();
 
+			if (debug) {
+				System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
+			}
+
+			if (!checkServerSignature(jsonResponse.getBody(), timestamp)) {
+				System.out.println("[ERROR] Could not verify the server's signature");
+				return;
+			}
+
 			if (jsonResponse.getStatus() == 400){
 				System.out.println("[ERROR] " + jsonResponse.getBody().getObject().get("message"));
 				return;
 			}
 			else if (jsonResponse.getStatus() == 201) {
-				if (debug) {
-					System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
-				}
 				System.out.println("Sent successfully! Transaction id: " + jsonResponse.getBody().getObject().get("id"));
 			}
 			else {
-				if (debug) {
-					System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
-				}
 				System.out.println("[ERROR] Unexpected status code: " + jsonResponse.getStatus());
 			}
 		} catch (UnirestException e) {
@@ -322,20 +357,23 @@ public class Client {
 					.field("sig", encodedSig)
 					.asJson();
 
+			if (debug) {
+				System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
+			}
+
+			if (!checkServerSignature(jsonResponse.getBody(), timestamp)) {
+				System.out.println("[ERROR] Could not verify the server's signature");
+				return;
+			}
+
 			if (jsonResponse.getStatus() == 400){
 				System.out.println("[ERROR] " + jsonResponse.getBody().getObject().get("message"));
 				return;
 			}
 			else if (jsonResponse.getStatus() == 201) {
-				if (debug) {
-					System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
-				}
 				System.out.println("Received successfully! Amount received: " + jsonResponse.getBody().getObject().get("amount"));
 			}
 			else {
-				if (debug) {
-					System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
-				}
 				System.out.println("[ERROR] Unexpected status code: " + jsonResponse.getStatus());
 			}
 		} catch (UnirestException e) {
@@ -345,27 +383,35 @@ public class Client {
 
 	public static void check(String keyHash){
 		String address = server + "/hds/"+urlEncode(keyHash)+"/check";
-
+		String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
 		if (debug) {
 			System.out.println("--- Sending ---");
 			System.out.println("Address: " + address);
 			System.out.println("Account Hash: " + keyHash);
+			System.out.println("Timestamp: " + timestamp);
 			System.out.println("---------------");
 		}
 
 		try {
-			HttpResponse<JsonNode> jsonResponse = Unirest.get(address)
+			HttpResponse<JsonNode> jsonResponse = Unirest.post(address)
 					.header("accept", "application/json")
+					.field("timestamp", timestamp)
 					.asJson();
+
+			if (debug) {
+				System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
+			}
+
+			if (!checkServerSignature(jsonResponse.getBody(), timestamp)) {
+				System.out.println("[ERROR] Could not verify the server's signature");
+				return;
+			}
 
 			if (jsonResponse.getStatus() == 400){
 				System.out.println("[ERROR] " + jsonResponse.getBody().getObject().get("message"));
 				return;
 			}
 			else if (jsonResponse.getStatus() == 200) {
-				if (debug) {
-					System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
-				}
 				System.out.println("Balance: " + jsonResponse.getBody().getObject().get("amount"));
 				System.out.println("Pending transactions: ");
 				JSONArray array = jsonResponse.getBody().getObject().getJSONArray("pendingTransactions");
@@ -374,9 +420,6 @@ public class Client {
 				}
 			}
 			else {
-				if (debug) {
-					System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
-				}
 				System.out.println("[ERROR] Unexpected status code: " + jsonResponse.getStatus());
 			}
 		} catch (UnirestException e) {
@@ -386,7 +429,7 @@ public class Client {
 
 	public static void audit(String keyHash){
 		String address = server + "/hds/"+urlEncode(keyHash)+"/audit";
-
+		String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
 		if (debug) {
 			System.out.println("--- Sending ---");
 			System.out.println("Address: " + address);
@@ -395,29 +438,33 @@ public class Client {
 		}
 
 		try {
-			HttpResponse<JsonNode> jsonResponse = Unirest.get(address)
+			HttpResponse<JsonNode> jsonResponse = Unirest.post(address)
 					.header("accept", "application/json")
+					.field("timestamp", timestamp)
 					.asJson();
+
+			if (debug) {
+				System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
+			}
+
+			if (!checkServerSignature(jsonResponse.getBody(), timestamp)) {
+				System.out.println("[ERROR] Could not verify the server's signature");
+				return;
+			}
 
 			if (jsonResponse.getStatus() == 400){
 				System.out.println("[ERROR] " + jsonResponse.getBody().getObject().get("message"));
 				return;
 			}
 			else if (jsonResponse.getStatus() == 200) {
-				if (debug) {
-					System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
-				}
 				System.out.println("Transaction list: ");
-				JSONArray array = jsonResponse.getBody().getArray();
+				JSONArray array = jsonResponse.getBody().getObject().getJSONArray("transactions");
 				for(int i = 0; i< array.length(); i++){
 					System.out.println(prettyPrintTransaction(array.getJSONObject(i)));
 					System.out.println("");
 				}
 			}
 			else {
-				if (debug) {
-					System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
-				}
 				System.out.println("[ERROR] Unexpected status code: " + jsonResponse.getStatus());
 			}
 		} catch (UnirestException e) {
@@ -425,15 +472,22 @@ public class Client {
 		}
 	}
 
-	public static boolean ping() {
+	public static boolean ping(String server) {
 		if (debug) {
 			System.out.println("[DEBUG] Pinging Server");
 		}
 		try {
-			HttpResponse<String> jsonResponse = Unirest.get(server+"/hds/ping")
-					.asString();
+			String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
+			HttpResponse<JsonNode> jsonResponse = Unirest.post(server+"/hds/ping")
+					.field("timestamp", timestamp)
+					.asJson();
 			if (debug) {
 				System.out.println("[DEBUG] Got " + jsonResponse.getStatus());
+				System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
+			}
+			if (!checkServerSignature(jsonResponse.getBody(), timestamp)) {
+				System.out.println("[ERROR] Could not verify the server's signature");
+				return false;
 			}
 			return jsonResponse.getStatus() == 200;
 		} catch (UnirestException e) {
@@ -469,6 +523,36 @@ public class Client {
 		}
 	}
 
+	public static boolean checkServerSignature(JsonNode response, String timestamp){
+		byte[] serverSig = null;
+		try {
+			serverSig = Base64.getDecoder().decode(response.getObject().getString("serverSig"));
+		} catch (JSONException e) {
+			if (debug) {
+				System.out.println("[DEBUG] Couldn't find the serverSig");
+			}
+			return false;
+		}
+
+		try {
+			Signature serverSigVerify = verifySignature(serverKey);
+			serverSigVerify.update(timestamp.getBytes());
+			if (!serverSigVerify.verify(serverSig)){
+				if (debug) {
+					System.out.println("[DEBUG] Failed to verify the serverSig");
+				}
+				return false;
+			}
+		} catch (InvalidKeyException | SignatureException e) {
+			if (debug) {
+				System.out.println("[DEBUG] Exception while verifying serverSig:");
+				System.out.println("[DEBUG] " + e.getMessage());
+			}
+			return false;
+		}
+		return true;
+	}
+
 	public static Signature createSignature(PrivateKey priv) throws InvalidKeyException {
 		Signature s = null;
 		try {
@@ -477,6 +561,17 @@ public class Client {
 			e.printStackTrace();
 		}
 		s.initSign(priv);
+		return s;
+	}
+
+	public static Signature verifySignature(PublicKey pub) throws InvalidKeyException {
+		Signature s = null;
+		try {
+			s = Signature.getInstance("SHA256withECDSA");
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+		s.initVerify(pub);
 		return s;
 	}
 

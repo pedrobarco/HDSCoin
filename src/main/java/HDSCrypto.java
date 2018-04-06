@@ -21,6 +21,21 @@ public class HDSCrypto {
 		}
 		return true;
 	}
+
+	public static KeyPair generateKeypairEC(){
+		KeyPairGenerator keyGen = null;
+		SecureRandom random = null;
+		try {
+			keyGen = KeyPairGenerator.getInstance("EC", "SunEC");
+			random = SecureRandom.getInstance("SHA1PRNG", "SUN");
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		} catch (NoSuchProviderException e) {
+			e.printStackTrace();
+		}
+		keyGen.initialize(224, random);
+		return keyGen.generateKeyPair();
+	}
 	
 	public static Signature createSignature(PrivateKey priv) throws InvalidKeyException{
 		Signature s = null;

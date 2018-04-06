@@ -142,7 +142,7 @@ public class HDSLib {
 		if (getTransactionBySig(sig) != null) {
 			throw new RepeatedTransactionException();
 		}
-
+		
         Transaction transaction = new Transaction(sourceAccount, destAccount, amount, timestamp, sig);
 		sourceAccount.addAmount(-amount);
         try {
