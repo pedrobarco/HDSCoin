@@ -23,7 +23,7 @@ import java.util.Date;
 import java.util.Scanner;
 
 public class Client {
-	public static boolean debug = true;
+	public static boolean debug = false;
 	public static String server;
 	public static PublicKey serverKey;
 
