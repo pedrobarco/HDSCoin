@@ -2,6 +2,7 @@ import domain.Account;
 import domain.Transaction;
 import exceptions.InvalidSignatureException;
 import exceptions.TimestampNotFreshException;
+import exceptions.TransactionAlreadyReceivedException;
 import exceptions.TransactionNotFoundException;
 import org.junit.After;
 import org.junit.Before;
@@ -91,6 +92,16 @@ public class ReceiveAmountTest {
 	@Test(expected = TransactionNotFoundException.class)
 	public void receiveAmountIdNotFound() throws Exception{
 		TestAux.receiveAmountHelper(691, privKey1, hdsLib);
+	}
+
+	@Test(expected = TransactionAlreadyReceivedException.class)
+	public void receiveAmountAlreadyReceived() throws Exception{
+		TestAux.registerHelper(pubKey1, privKey1, hdsLib).getKeyHash();
+		TestAux.registerHelper(pubKey2, privKey2, hdsLib).getKeyHash();
+		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, privKey1, hdsLib);
+
+		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey2, hdsLib);
+		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey2, hdsLib);
 	}
 
 	@Test(expected = InvalidSignatureException.class)

@@ -120,12 +120,9 @@ public class HDSLib {
         	throw new AccountNotFoundException("Source account not found: " + sourceKeyHash);
         } else if (destAccount == null) {
             throw new AccountNotFoundException("Destination account not found: " + destKeyHash);
-        } else if (sourceAccount.getAmount() < amount) {
-            throw new AccountInsufficientAmountException();
         } else if (sourceKeyHash.equals(destKeyHash)) {
 	    	throw new SameSourceAndDestAccountException();
 	    }
-
         if (!HDSCrypto.validateTimestamp(timeReceived, timestamp)) {
         	throw new TimestampNotFreshException("Timestamp not fresh: " + timestamp);
 		}
@@ -139,20 +136,27 @@ public class HDSLib {
 			throw new InvalidSignatureException("Signature not valid");
 		}
 
-		if (getTransactionBySig(sig) != null) {
-			throw new RepeatedTransactionException();
+		// Check for repeated transactions, verify the amount and then update it atomically
+		synchronized (this) {
+			if (getTransactionBySig(sig) != null) {
+				throw new RepeatedTransactionException();
+			}
+
+			if (sourceAccount.getAmount() < amount) {
+				throw new AccountInsufficientAmountException();
+			}
+
+			Transaction transaction = new Transaction(sourceAccount, destAccount, amount, timestamp, sig);
+			sourceAccount.addAmount(-amount);
+			try {
+				transactions.create(transaction);
+				accounts.update(sourceAccount);
+				accounts.update(destAccount);
+				return transaction;
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
 		}
-		
-        Transaction transaction = new Transaction(sourceAccount, destAccount, amount, timestamp, sig);
-		sourceAccount.addAmount(-amount);
-        try {
-            transactions.create(transaction);
-            accounts.update(sourceAccount);
-			accounts.update(destAccount);
-            return transaction;
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
         return null;
     }
 
@@ -172,7 +176,7 @@ public class HDSLib {
         return new AccountState(account.getKeyHash(), account.getAmount(), pendingIncomingTransactions);
     }
 
-    public Transaction receiveAmount(int id, Date timestamp, byte[] sig) throws TransactionNotFoundException, AccountInsufficientAmountException, InvalidKeyException, SignatureException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException {
+    public Transaction receiveAmount(int id, Date timestamp, byte[] sig) throws TransactionNotFoundException, AccountInsufficientAmountException, InvalidKeyException, SignatureException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException, TransactionAlreadyReceivedException {
     	Date timeReceived = new Date();
 		checkNullTimestamp(timestamp);
 		checkNullSignature(sig);
@@ -201,16 +205,27 @@ public class HDSLib {
 		if(!s.verify(sig)){
 			throw new InvalidSignatureException("Signature not valid");
 		}
-        
-        destAccount.addAmount(transaction.getAmount());
-        transaction.complete(timestamp, sig);
-        try {
-            transactions.update(transaction);
-            accounts.update(destAccount);
-            return transaction;
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+		// Make sure the transaction wasn't already received and complete it atomically
+		synchronized (this) {
+			try {
+				transactions.refresh(transaction);
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			if (!transaction.isPending()) {
+				throw new TransactionAlreadyReceivedException("This transaction was already received: " + transaction.getId());
+			}
+
+			destAccount.addAmount(transaction.getAmount());
+			transaction.complete(timestamp, sig);
+			try {
+				transactions.update(transaction);
+				accounts.update(destAccount);
+				return transaction;
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
         return null;
     }
 
