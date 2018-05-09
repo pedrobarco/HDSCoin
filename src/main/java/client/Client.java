@@ -1,7 +1,9 @@
 package client;
 
 import client.commands.*;
+import client.domain.Account;
 import client.domain.Server;
+import client.domain.Transaction;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -11,13 +13,14 @@ import java.security.*;
 import java.security.cert.CertificateException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
+import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static client.ClientCrypto.generateCertificate;
 
 @SuppressWarnings("Duplicates")
 public class Client {
-    private enum Command {REGISTER, SEND, RECEIVE, CHECK, AUDIT}
     private static PublicKey publicKey = null;
     private static PrivateKey privateKey = null;
 
@@ -25,10 +28,16 @@ public class Client {
 
     public static List<Server> servers;
 
-    private static List<Integer> responses;
+    private static int responses;
+    private static Map<String, Integer> errors;
+    private static List<Object> validResponses;
+
+    private static List<Transaction> transactionList;
+    private static Account account;
+
     private static final Object syncObject = new Object();
 
-    public static boolean debug = false;
+    public static boolean debug = true;
 
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
@@ -88,33 +97,37 @@ public class Client {
             choice = scanner.nextLine();
             switch (choice){
                 case "1":
-                    runCommand(Command.REGISTER);
+                    register();
                     break;
                 case "2":
+                    if (!audit(false)) {
+                        break;
+                    }
                     System.out.print("Destination: ");
                     String dest = scanner.nextLine();
                     System.out.print("Amount: ");
                     String amount = scanner.nextLine();
-                    runCommand(Command.SEND, dest, amount);
+                    send(dest, amount);
                     break;
                 case "3":
-                    runCommand(Command.CHECK);
-                    System.out.print("Transaction ID: ");
-                    String id = scanner.nextLine();
-                    // TODO: Automatically get signature (store transactions)
-                    System.out.print("Signature: ");
-                    String signature = scanner.nextLine();
-                    if (!org.apache.commons.codec.binary.Base64.isBase64(signature)){
-                        System.out.println("Signature is not valid Base64");
+                    if (!audit(false)) {
                         break;
                     }
-                    runCommand(Command.RECEIVE, id, signature);
+                    if (!check()) {
+                        break;
+                    }
+                    if (account.getPendingTransactions().isEmpty()){
+                        break;
+                    }
+                    System.out.print("Transaction ID: ");
+                    String id = scanner.nextLine();
+                    receive(id);
                     break;
                 case "4":
-                    runCommand(Command.CHECK);
+                    check();
                     break;
                 case "5":
-                    runCommand(Command.AUDIT);
+                    audit(true);
                     break;
                 case "0":
                     break;
@@ -265,33 +278,26 @@ public class Client {
         System.out.println("Connected to " + servers.size() + " servers");
     }
 
-    private static void runCommand(Command c, String... args){
-        responses = new LinkedList<>();
-        for (Server server:servers){
-            Thread t;
-            switch (c){
-                case REGISTER:
-                    t = new Thread(new Register(server, publicKey, privateKey));
-                    t.start();
-                    break;
-                case SEND:
-                    t = new Thread(new Send(server, publicKeyHash, args[0], args[1], privateKey));
-                    t.start();
-                    break;
-                case RECEIVE:
-                    t = new Thread(new Receive(server, args[0], args[1], privateKey));
-                    t.start();
-                    break;
-                case CHECK:
-                    t = new Thread(new Check(server, publicKeyHash));
-                    t.start();
-                    break;
-                case AUDIT:
-                    t = new Thread(new Audit(server, publicKeyHash));
-                    t.start();
-                    break;
-            }
+    public static void register(){
+        responses = 0;
+        errors = new HashMap<>();
+        validResponses = new LinkedList<>();
+        String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
+        String signature = Register.sign(publicKey, timestamp, privateKey);
+
+        if (debug) {
+            System.out.println("--- Sending ---");
+            System.out.println("Public key: " + publicKeyHash);
+            System.out.println("Timestamp: " + timestamp);
+            System.out.println("Sig: " + signature);
+            System.out.println("---------------");
         }
+
+        for (Server server:servers){
+            Thread t = new Thread(new Register(server, publicKey, timestamp, signature));
+            t.start();
+        }
+
         synchronized(syncObject) {
             try {
                 syncObject.wait();
@@ -299,14 +305,372 @@ public class Client {
                 System.out.println("[DEBUG] Thread interrupted");
             }
         }
-        System.out.println("[DEBUG] Received all responses");
+        if (debug) {
+            System.out.println("[DEBUG] Received majority responses");
+
+            if (validResponses.isEmpty()) {
+                for (String error:errors.keySet()){
+                    System.out.println("[DEBUG] " + errors.get(error) + " servers returned error:\n[DEBUG] " + error);
+                }
+            }
+        }
+
+        String response = "[ERROR] Couldn't get any response. This shouldn't happen.";
+        long max = 0;
+        Map<String, Long> counts =
+                validResponses.stream().collect(Collectors.groupingBy(e -> (String)e, Collectors.counting()));
+        for (String r:counts.keySet()){
+            if (counts.get(r) > max){
+                max = counts.get(r);
+                response = r;
+            }
+        }
+        for (String e:errors.keySet()){
+            if (errors.get(e) >= max){
+                max = errors.get(e);
+                response = "[ERROR] " + e;
+            }
+        }
+
+        System.out.println(response);
     }
 
-    public static synchronized void callback(int status){
-        responses.add(status);
-        System.out.println("Received " + responses.size() + " responses so far");
+    public static synchronized void callbackRegister(Server server, String response){
+        responses = responses+1;
+        validResponses.add(response);
+        if (debug) {
+            System.out.println("[DEBUG] Received " + responses + " responses so far");
+        }
         // TODO: determine how many are needed for majority
-            if (responses.size() >= 2){
+        if (responses >= 2){
+            synchronized (syncObject) {
+                syncObject.notify();
+            }
+        }
+    }
+
+    public static void send(String dest, String amount){
+        responses = 0;
+        errors = new HashMap<>();
+        validResponses = new LinkedList<>();
+        String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
+        String previousTransaction = "000000";
+        if (transactionList != null && !transactionList.isEmpty()){
+            previousTransaction = transactionList.get(transactionList.size()-1).getTransactionHash();
+        }
+        String signature = Send.sign(publicKeyHash, dest, amount, previousTransaction, timestamp, privateKey);
+
+        if (debug) {
+            System.out.println("--- Sending ---");
+            System.out.println("Source hash: " + publicKeyHash);
+            System.out.println("Destination hash: " + dest);
+            System.out.println("Amount: " + amount);
+            System.out.println("Previous transaction: " + previousTransaction);
+            System.out.println("Timestamp: " + timestamp);
+            System.out.println("Sig: " + signature);
+            System.out.println("---------------");
+        }
+
+        for (Server server:servers){
+            Thread t = new Thread(new Send(server, publicKeyHash, dest, amount, previousTransaction, timestamp, signature));
+            t.start();
+        }
+
+        synchronized(syncObject) {
+            try {
+                syncObject.wait();
+            } catch (InterruptedException e) {
+                System.out.println("[DEBUG] Thread interrupted");
+            }
+        }
+        if (debug) {
+            System.out.println("[DEBUG] Received majority responses");
+
+            if (validResponses.isEmpty()) {
+                for (String error:errors.keySet()){
+                    System.out.println("[DEBUG] " + errors.get(error) + " servers returned error:\n[DEBUG] " + error);
+                }
+            }
+        }
+
+        String response = "[ERROR] Couldn't get any response. This shouldn't happen.";
+        long max = 0;
+        Map<String, Long> counts =
+                validResponses.stream().collect(Collectors.groupingBy(e -> (String)e, Collectors.counting()));
+        for (String r:counts.keySet()){
+            if (counts.get(r) > max){
+                max = counts.get(r);
+                response = r;
+            }
+        }
+        for (String e:errors.keySet()){
+            if (errors.get(e) >= max){
+                max = errors.get(e);
+                response = "[ERROR] " + e;
+            }
+        }
+
+        System.out.println(response);
+    }
+
+    public static synchronized void callbackSend(Server server, String response){
+        responses = responses+1;
+        validResponses.add(response);
+        if (debug) {
+            System.out.println("[DEBUG] Received " + responses + " responses so far");
+        }
+        // TODO: determine how many are needed for majority
+        if (responses >= 2){
+            synchronized (syncObject) {
+                syncObject.notify();
+            }
+        }
+    }
+
+    public static void receive(String transactionID){
+        responses = 0;
+        errors = new HashMap<>();
+        validResponses = new LinkedList<>();
+        String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
+        String transactionSig = account.getPendingTransactions().get(Integer.parseInt(transactionID)).getSignature();
+        if (transactionSig == null) {
+            System.out.println("[ERROR] No such transaction ID");
+            return;
+        }
+        String previousTransaction = "000000";
+        if (transactionList != null && !transactionList.isEmpty()){
+            previousTransaction = transactionList.get(transactionList.size()-1).getTransactionHash();
+        }
+        String signature = Receive.sign(transactionID, transactionSig, previousTransaction, timestamp, privateKey);
+
+        if (debug) {
+            System.out.println("--- Sending ---");
+            System.out.println("Transaction ID: " + transactionID);
+            System.out.println("Transaction Sig: " + transactionSig);
+            System.out.println("Timestamp: " + timestamp);
+            System.out.println("Sig: " + signature);
+            System.out.println("---------------");
+        }
+
+        for (Server server:servers){
+            Thread t = new Thread(new Receive(server, transactionID, transactionSig, previousTransaction, timestamp, signature));
+            t.start();
+        }
+
+        synchronized(syncObject) {
+            try {
+                syncObject.wait();
+            } catch (InterruptedException e) {
+                System.out.println("[DEBUG] Thread interrupted");
+            }
+        }
+        if (debug) {
+            System.out.println("[DEBUG] Received majority responses");
+
+            if (validResponses.isEmpty()) {
+                for (String error:errors.keySet()){
+                    System.out.println("[DEBUG] " + errors.get(error) + " servers returned error:\n[DEBUG] " + error);
+                }
+            }
+        }
+
+        String response = "[ERROR] Couldn't get any response. This shouldn't happen.";
+        long max = 0;
+        Map<String, Long> counts =
+                validResponses.stream().collect(Collectors.groupingBy(e -> (String)e, Collectors.counting()));
+        for (String r:counts.keySet()){
+            if (counts.get(r) > max){
+                max = counts.get(r);
+                response = r;
+            }
+        }
+        for (String e:errors.keySet()){
+            if (errors.get(e) >= max){
+                max = errors.get(e);
+                response = "[ERROR] " + e;
+            }
+        }
+
+        System.out.println(response);
+    }
+
+    public static synchronized void callbackReceive(Server server, String response){
+        responses = responses+1;
+        validResponses.add(response);
+        if (debug) {
+            System.out.println("[DEBUG] Received " + responses + " responses so far");
+        }
+        // TODO: determine how many are needed for majority
+        if (responses >= 2){
+            synchronized (syncObject) {
+                syncObject.notify();
+            }
+        }
+    }
+
+    public static boolean check(){
+        responses = 0;
+        errors = new HashMap<>();
+        validResponses = new LinkedList<>();
+        String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
+        if (debug) {
+            System.out.println("--- Sending ---");
+            System.out.println("Account Hash: " + publicKeyHash);
+            System.out.println("Timestamp: " + timestamp);
+            System.out.println("---------------");
+        }
+
+        for (Server server:servers){
+            Thread t = new Thread(new Check(server, publicKeyHash,timestamp));
+            t.start();
+        }
+
+        synchronized(syncObject) {
+            try {
+                syncObject.wait();
+            } catch (InterruptedException e) {
+                System.out.println("[DEBUG] Thread interrupted");
+            }
+        }
+        if (debug) {
+            System.out.println("[DEBUG] Received majority responses");
+        }
+        if (validResponses.isEmpty()) {
+            for (String error:errors.keySet()){
+                System.out.println(errors.get(error) + " servers returned error:\n" + error);
+            }
+            return false;
+        }
+
+        long max = 0;
+        Map<Account, Long> counts =
+                validResponses.stream().collect(Collectors.groupingBy(e -> (Account)e, Collectors.counting()));
+        for (Account a:counts.keySet()){
+            if (counts.get(a) > max){
+                max = counts.get(a);
+                account = a;
+            }
+        }
+
+        System.out.println("Balance for " + publicKeyHash + ": " + account.getBalance());
+        if (account.getPendingTransactions() == null || account.getPendingTransactions().isEmpty()) {
+            System.out.println("No pending transactions found");
+        } else {
+            System.out.println("Pending transaction list: ");
+            for (Transaction t : account.getPendingTransactions().values()) {
+                System.out.println();
+                System.out.println(t.toString());
+            }
+        }
+        return true;
+    }
+
+    public static synchronized void callbackCheck(Server server, Account response){
+        responses = responses+1;
+        validResponses.add(response);
+        if (debug) {
+            System.out.println("[DEBUG] Received " + responses + " responses so far");
+        }
+        // TODO: determine how many are needed for majority
+        if (responses >= 2){
+            synchronized (syncObject) {
+                syncObject.notify();
+            }
+        }
+    }
+
+    public static boolean audit(boolean print){
+        responses = 0;
+        errors = new HashMap<>();
+        validResponses = new LinkedList<>();
+        String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
+        if (debug) {
+            System.out.println("--- Sending ---");
+            System.out.println("Account Hash: " + publicKeyHash);
+            System.out.println("Timestamp: " + timestamp);
+            System.out.println("---------------");
+        }
+
+        for (Server server:servers){
+            Thread t = new Thread(new Audit(server, publicKeyHash,timestamp, publicKey));
+            t.start();
+        }
+
+        synchronized(syncObject) {
+            try {
+                syncObject.wait();
+            } catch (InterruptedException e) {
+                System.out.println("[DEBUG] Thread interrupted");
+            }
+        }
+        if (debug) {
+            System.out.println("[DEBUG] Received majority responses");
+        }
+        if (validResponses.isEmpty()) {
+            for (String error:errors.keySet()){
+                System.out.println(errors.get(error) + " servers returned error:\n" + error);
+            }
+            return false;
+        }
+        int maxOps = 0;
+        List<Transaction> chosenList = null;
+        for (Object response:validResponses){
+            List<Transaction> l = (List<Transaction>) response;
+            if (l.size() > maxOps) {
+                maxOps = l.size();
+                chosenList = l;
+            }
+        }
+
+        if (debug){
+            System.out.println("[DEBUG] maxOps: " + maxOps);
+        }
+
+        if (print) {
+            if (chosenList == null) {
+                System.out.println("No transactions found for " + publicKeyHash);
+            } else {
+                System.out.println("Transaction list for " + publicKeyHash);
+                for (Transaction t : chosenList) {
+                    System.out.println();
+                    System.out.println(t.toString());
+                }
+            }
+        }
+
+        transactionList = chosenList;
+        return true;
+    }
+
+    public static synchronized void callbackAudit(Server server, List<Transaction> response){
+        responses = responses+1;
+        validResponses.add(response);
+        if (debug) {
+            System.out.println("[DEBUG] Added transaction list of size " + response.size());
+            System.out.println("[DEBUG] Received " + responses + " responses so far");
+        }
+        // TODO: determine how many are needed for majority
+        if (responses >= 2){
+            synchronized (syncObject) {
+                syncObject.notify();
+            }
+        }
+    }
+
+    public static synchronized void callbackError(Server server, String response){
+        responses = responses+1;
+        if (errors.containsKey(response)){
+            errors.put(response, errors.get(response)+1);
+        } else {
+            errors.put(response, 1);
+        }
+
+        if (debug) {
+            System.out.println("[DEBUG] Got error: " + response);
+            System.out.println("[DEBUG] Received " + responses + " responses so far");
+        }
+        // TODO: determine how many are needed for majority
+        if (responses >= 2){
             synchronized (syncObject) {
                 syncObject.notify();
             }

@@ -5,6 +5,9 @@ import com.j256.ormlite.field.DatabaseField;
 import com.j256.ormlite.table.DatabaseTable;
 
 import java.io.Serializable;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.Date;
 
 @SuppressWarnings("serial")
@@ -13,39 +16,87 @@ public class Transaction implements Serializable{
 
 	@DatabaseField(generatedId=true)
     private int id;
+	@DatabaseField
+    private boolean last;
     @DatabaseField(foreign = true, foreignAutoRefresh = true)
     private Account from;
     @DatabaseField(foreign = true, foreignAutoRefresh = true)
     private Account to;
     @DatabaseField
     private int amount;
+
+    @DatabaseField(foreign = true, foreignAutoRefresh = true)
+    private Account owner;
+    @DatabaseField
+    private boolean receiving;
+    @DatabaseField
+    private int senderId; // ID of the send transaction associated with this one. Null if a transaction is a send
+    @DatabaseField(dataType=DataType.BYTE_ARRAY)
+    private byte[] senderSig; // Null if transaction is a send
     @DatabaseField
     private boolean pending;
-    @DatabaseField(dataType = DataType.DATE)
-    private Date sentTimestamp;
-    @DatabaseField(dataType = DataType.DATE)
-    private Date receivedTimestamp;
+
+    //@DatabaseField(dataType = DataType.DATE)
+    @DatabaseField
+    private String timestamp;
     @DatabaseField(dataType=DataType.BYTE_ARRAY)
-    private byte[] senderSig;
-    @DatabaseField(dataType=DataType.BYTE_ARRAY)
-    private byte[] receiverSig;
+    private byte[] sig;
+    @DatabaseField
+    private String transactionHash;
+    @DatabaseField
+    private String previousTransaction;
 
     public Transaction() {
 
     }
 
-    public Transaction(Account from, Account to, int amount, Date timestamp, byte[] sig) {
-        this(from, to, amount, timestamp, true, sig);
+    public Transaction(Account from, Account to, int amount, String timestamp, String previousTransaction, byte[] sig) {
+        this(from, to, amount, timestamp, true, false, previousTransaction, sig);
     }
 
-    public Transaction(Account from, Account to, int amount, Date timestamp, boolean pending, byte[] sig) {
+    public Transaction(Account from, Account to, int amount, String timestamp, boolean pending, boolean receiving,String previousTransaction, byte[] sig) {
         this.from = from;
         this.to = to;
         this.amount = amount;
         this.pending = pending;
-        this.sentTimestamp = timestamp;
-        this.senderSig = sig;
+        this.receiving = receiving;
+        this.timestamp = timestamp;
+        if (previousTransaction != null) {
+            this.previousTransaction = previousTransaction;
+        } else {
+            // FIXME: Is this needed?
+            this.previousTransaction = "000000";
+        }
+        this.sig = sig;
+
+        try {
+            MessageDigest digester = MessageDigest.getInstance("SHA-256");
+            digester.update(sig);
+            this.transactionHash = Base64.getEncoder().encodeToString(digester.digest());
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+
+        if (receiving) {
+            this.owner = to;
+        } else {
+            this.owner = from;
+        }
     }
+
+    public static Transaction ReceiveTransaction(Transaction transaction, String timestamp, String previousTransaction, byte[] sig) {
+        Transaction receive = new Transaction(transaction.from, transaction.to, transaction.amount, timestamp, false, true, previousTransaction, sig);
+        transaction.setPending(false);
+        receive.setSenderSig(transaction.getSig());
+        return receive;
+    }
+
+    /*public void complete(Date timestamp, String previousTransaction, byte[] sig){
+        this.pending = false;
+        this.receivedTimestamp = timestamp;
+        this.previousTransactionReceiver = previousTransaction;
+        this.receiverSig = sig;
+    }*/
 
     public Account getFrom() {
         return from;
@@ -83,46 +134,64 @@ public class Transaction implements Serializable{
         return this.pending;
     }
 
+    public boolean isReceiving() {
+        return receiving;
+    }
+
+    public void setReceiving(boolean receiving) {
+        this.receiving = receiving;
+    }
+
     public void setPending(boolean pending) {
         this.pending = pending;
     }
 
-    public Date getSentTimestamp() {
-        return sentTimestamp;
+    public boolean isLast() {
+        return last;
     }
 
-    public void setSentTimestamp(Date sentTimestamp) {
-        this.sentTimestamp = sentTimestamp;
+    public void setLast(boolean last) {
+        this.last = last;
     }
 
-    public Date getReceivedTimestamp() {
-        return receivedTimestamp;
+    public String getTimestamp() {
+        return timestamp;
     }
 
-    public void setReceivedTimestamp(Date receivedTimestamp) {
-        this.receivedTimestamp = receivedTimestamp;
+    public void setTimestamp(String timestamp) {
+        this.timestamp = timestamp;
     }
 
-    public byte[] getSenderSig() {
-        return senderSig;
+    public byte[] getSig() {
+        return sig;
     }
 
-    public void setSenderSig(byte[] senderSig) {
-        this.senderSig = senderSig;
+    public void setSig(byte[] sig) {
+        this.sig = sig;
     }
 
-    public byte[] getReceiverSig() {
-        return receiverSig;
+    public String getPreviousTransaction() {
+        return previousTransaction;
     }
 
-    public void setReceiverSig(byte[] receiverSig) {
-        this.receiverSig = receiverSig;
+    public void setPreviousTransaction(String previousTransaction) {
+        this.previousTransaction = previousTransaction;
     }
 
-    public void complete(Date timestamp, byte[] sig){
-        this.pending = false;
-        this.receivedTimestamp = timestamp;
-        this.receiverSig = sig;
+    public String getTransactionHash() {
+        return transactionHash;
+    }
+
+    public void setTransactionHash(String transactionHash) {
+        this.transactionHash = transactionHash;
+    }
+
+    public Account getOwner() {
+        return owner;
+    }
+
+    public void setOwner(Account owner) {
+        this.owner = owner;
     }
 
     @Override
@@ -155,5 +224,21 @@ public class Transaction implements Serializable{
             return false;
         }
         return true;
+    }
+
+    public byte[] getSenderSig() {
+        return senderSig;
+    }
+
+    public void setSenderSig(byte[] senderSig) {
+        this.senderSig = senderSig;
+    }
+
+    public int getSenderId() {
+        return senderId;
+    }
+
+    public void setSenderId(int senderId) {
+        this.senderId = senderId;
     }
 }

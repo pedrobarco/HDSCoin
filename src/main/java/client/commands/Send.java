@@ -25,47 +25,23 @@ public class Send implements Runnable{
     private String source;
     private String dest;
     private String amount;
-    private PrivateKey privateKey;
+    private String previousTransaction;
+    private String timestamp;
+    private String sig;
 
-    public Send(Server server, String source, String dest, String amount, PrivateKey privateKey){
+    public Send(Server server, String source, String dest, String amount, String previousTransaction, String timestamp, String sig){
         this.server = server;
         this.source = source;
         this.dest = dest;
         this.amount = amount;
-        this.privateKey = privateKey;
+        this.previousTransaction = previousTransaction;
+        this.timestamp = timestamp;
+        this.sig = sig;
     }
 
     @Override
     public void run() {
-        String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
-
-        Signature s = null;
-        byte[] sig = null;
-        try {
-            s = createSignature(privateKey);
-            s.update(source.getBytes());
-            s.update(dest.getBytes());
-            s.update(BigInteger.valueOf(Integer.parseInt(amount)).toByteArray());
-            s.update(timestamp.getBytes());
-            sig = s.sign();
-        } catch (InvalidKeyException | SignatureException e) {
-            System.out.println("[ERROR] " + e.getMessage());
-            return;
-        }
-
-        String encodedSig = new String(Base64.getEncoder().encode(sig));
         String address = server.getAddress() + "/hds/"+urlEncode(source)+"/send";
-
-        if (debug) {
-            System.out.println("--- Sending ---");
-            System.out.println("Address: " + address);
-            System.out.println("Source hash: " + source);
-            System.out.println("Destination hash: " + dest);
-            System.out.println("Amount: " + amount);
-            System.out.println("Timestamp: " + timestamp);
-            System.out.println("Sig: " + encodedSig);
-            System.out.println("---------------");
-        }
 
         try {
             HttpResponse<JsonNode> jsonResponse = Unirest.post(address)
@@ -73,28 +49,52 @@ public class Send implements Runnable{
                     .field("destKey", dest)
                     .field("amount", amount)
                     .field("timestamp", timestamp)
-                    .field("sig", encodedSig)
+                    .field("previousTransaction", previousTransaction)
+                    .field("sig", sig)
                     .asJson();
 
             if (debug) {
                 System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
             }
 
-            else if (!checkServerSignature(jsonResponse.getBody(), timestamp, server.getPublicKey())) {
-                System.out.println("[ERROR] Could not verify the server's signature");
+            if (!checkServerSignature(jsonResponse.getBody(), timestamp, server.getPublicKey())) {
+                Client.callbackError(server, "Could not verify the server's signature");
             }
             else if (jsonResponse.getStatus() == 400){
-                System.out.println("[ERROR] " + jsonResponse.getBody().getObject().get("message"));
+                Client.callbackError(server, jsonResponse.getBody().getObject().getString("message"));
             }
             else if (jsonResponse.getStatus() == 201) {
-                System.out.println("Sent successfully! Transaction id: " + jsonResponse.getBody().getObject().get("id"));
+                Client.callbackSend(server, "Sent successfully! Transaction id: " + jsonResponse.getBody().getObject().get("id"));
             }
             else {
-                System.out.println("[ERROR] Unexpected status code: " + jsonResponse.getStatus());
+                Client.callbackError(server, "Unexpected status code: " + jsonResponse.getStatus());
             }
-            Client.callback(jsonResponse.getStatus());
         } catch (UnirestException e) {
             e.printStackTrace();
         }
+    }
+
+    public static String sign(String source, String dest, String amount, String previousTransaction, String timestamp, PrivateKey privateKey){
+        Signature s = null;
+        byte[] sig = null;
+        try {
+            s = createSignature(privateKey);
+            s.update(source.getBytes());
+            //System.out.println("[HEREC] from: " + source);
+            s.update(dest.getBytes());
+            //System.out.println("[HEREC] to: " + dest);
+            s.update(BigInteger.valueOf(Integer.parseInt(amount)).toByteArray());
+            //System.out.println("[HEREC] amount: " + amount);
+            s.update(previousTransaction.getBytes());
+            //System.out.println("[HEREC] prevTrans: " + previousTransaction);
+            s.update(timestamp.getBytes());
+            //System.out.println("[HEREC] timestamp: " + timestamp);
+            sig = s.sign();
+        } catch (InvalidKeyException | SignatureException e) {
+            System.out.println("[ERROR] " + e.getMessage());
+            return null;
+        }
+
+        return new String(Base64.getEncoder().encode(sig));
     }
 }

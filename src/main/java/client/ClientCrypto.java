@@ -120,8 +120,8 @@ public class ClientCrypto {
         String id = Integer.toString(transaction.getInt("id"));
         String amount = Integer.toString(transaction.getInt("amount"));
         String from = transaction.getJSONObject("from").getString("keyHash");
-        String signature = transaction.getString("senderSig");
-        return "  Transaction " + id + ": " + amount + " coins [FROM: " + from + "| SIGNATURE: " + signature + "]";
+        String signature = transaction.getString("sig");
+        return "  Transaction " + id + ": " + amount + " coins [FROM: " + from + " | SIGNATURE: " + signature + "]";
     }
 
     public static String prettyPrintTransaction(JSONObject transaction) {

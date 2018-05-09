@@ -67,8 +67,7 @@ public class Application {
         app.post("/hds/", ctx -> {
             String key = ctx.formParam("key");
             byte[] sig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("sig")));
-            Date timestamp = HDSCrypto.stringToDate(ctx.formParam("timestamp"));
-            Account account = HDSLib.getInstance().register(HDSCrypto.stringToPublicKey(key), timestamp, sig);
+            Account account = HDSLib.getInstance().register(HDSCrypto.stringToPublicKey(key), ctx.formParam("timestamp"), sig);
             if (account == null) {
                 ctx.status(500);
                 //ctx.result("Error registering account.");
@@ -127,8 +126,8 @@ public class Application {
             String destKey = ctx.formParam("destKey");
             int amount = Integer.parseInt(Objects.requireNonNull(ctx.formParam("amount")));
             byte[] sig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("sig")));
-            Date timestamp = HDSCrypto.stringToDate(ctx.formParam("timestamp"));
-            Transaction transaction = HDSLib.getInstance().sendAmount(sourceKey, destKey,  amount, timestamp, sig);
+            String previousTransaction = ctx.formParam("previousTransaction");
+            Transaction transaction = HDSLib.getInstance().sendAmount(sourceKey, destKey,  amount, previousTransaction, ctx.formParam("timestamp"), sig);
             if (transaction == null) {
                 ctx.status(500);
                 //ctx.result("Error sending coins.");
@@ -143,8 +142,8 @@ public class Application {
             int id = Integer.parseInt(Objects.requireNonNull(ctx.param("id")));
             byte[] transactionSig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("transactionSig")));
             byte[] sig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("sig")));
-            Date timestamp = HDSCrypto.stringToDate(ctx.formParam("timestamp"));
-            Transaction transaction = HDSLib.getInstance().receiveAmount(id, transactionSig, timestamp, sig);
+            String previousTransaction = ctx.formParam("previousTransaction");
+            Transaction transaction = HDSLib.getInstance().receiveAmount(id, transactionSig, previousTransaction, ctx.formParam("timestamp"), sig);
             if (transaction == null) {
                 ctx.status(500);
                 //ctx.result("Error confirming transaction.");

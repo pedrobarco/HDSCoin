@@ -21,19 +21,53 @@ import static client.Client.debug;
 public class Register implements Runnable {
     private Server server;
     private PublicKey publicKey;
-    private PrivateKey privateKey;
+    private String timestamp;
+    private String sig;
 
-    public Register(Server server, PublicKey publicKey, PrivateKey privateKey){
-        this.privateKey = privateKey;
+    public Register(Server server, PublicKey publicKey, String timestamp, String sig){
         this.publicKey = publicKey;
         this.server = server;
+        this.timestamp = timestamp;
+        this.sig = sig;
     }
 
     @Override
     public void run() {
-        // TODO: Printing like it is being done is bad in a threaded environment
+        try {
+            String publicKeyString = new String(Base64.getEncoder().encode(publicKey.getEncoded()));
+            String address = server.getAddress() + "/hds/";
+
+            HttpResponse<JsonNode> jsonResponse = Unirest.post(address)
+                    .header("accept", "application/json")
+                    .field("key", publicKeyString)
+                    .field("timestamp", timestamp)
+                    .field("sig", sig)
+                    .asJson();
+
+            if (debug) {
+                System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
+            }
+
+            if (!checkServerSignature(jsonResponse.getBody(), timestamp, server.getPublicKey())) {
+                Client.callbackError(server, "Could not verify the server's signature");
+            }
+
+            else if (jsonResponse.getStatus() == 400){
+                Client.callbackError(server, jsonResponse.getBody().getObject().getString("message"));
+            }
+            else if (jsonResponse.getStatus() == 201) {
+                Client.callbackRegister(server,"Registered successfully! Your hash: " + jsonResponse.getBody().getObject().get("keyHash"));
+            }
+            else {
+                Client.callbackError(server, "Unexpected status code: " + jsonResponse.getStatus());
+            }
+        } catch (UnirestException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static String sign(PublicKey publicKey, String timestamp, PrivateKey privateKey){
         String publicKeyString = new String(Base64.getEncoder().encode(publicKey.getEncoded()));
-        String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
 
         Signature s = null;
         byte[] sig = null;
@@ -43,49 +77,9 @@ public class Register implements Runnable {
             sig = s.sign();
         } catch (InvalidKeyException | SignatureException e) {
             System.out.println("[ERROR] " + e.getMessage());
-            return;
+            return null;
         }
 
-        String encodedSig = new String(Base64.getEncoder().encode(sig));
-        String address = server.getAddress() + "/hds/";
-        if (debug) {
-            System.out.println("--- Sending ---");
-            System.out.println("Address: " + address);
-            System.out.println("Public key: " + publicKeyString);
-            System.out.println("Timestamp: " + timestamp);
-            System.out.println("Sig: " + encodedSig);
-            System.out.println("---------------");
-        }
-
-        try {
-            HttpResponse<JsonNode> jsonResponse = Unirest.post(address)
-                    .header("accept", "application/json")
-                    .field("key", publicKeyString)
-                    .field("timestamp", timestamp)
-                    .field("sig", encodedSig)
-                    .asJson();
-
-            if (debug) {
-                System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
-            }
-
-            if (!checkServerSignature(jsonResponse.getBody(), timestamp, server.getPublicKey())) {
-                System.out.println("[ERROR] Could not verify the server's signature");
-            }
-
-            else if (jsonResponse.getStatus() == 400){
-                System.out.println("[ERROR] " + jsonResponse.getBody().getObject().get("message"));
-            }
-            else if (jsonResponse.getStatus() == 201) {
-                System.out.println("Registered successfully! Your hash: " + jsonResponse.getBody().getObject().get("keyHash"));
-            }
-            else {
-                System.out.println("[ERROR] Unexpected status code: " + jsonResponse.getStatus());
-            }
-
-            Client.callback(jsonResponse.getStatus());
-        } catch (UnirestException e) {
-            e.printStackTrace();
-        }
+        return new String(Base64.getEncoder().encode(sig));
     }
 }
