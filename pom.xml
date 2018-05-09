@@ -33,6 +33,9 @@
                         </goals>
                         <configuration>
                             <mainClass>Application</mainClass>
+                            <arguments>
+                                <argument>8080</argument>
+                            </arguments>
                         </configuration>
                     </execution>
                 </executions>

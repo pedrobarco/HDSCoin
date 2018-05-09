@@ -11,6 +11,8 @@ import exceptions.*;
 import java.math.BigInteger;
 import java.security.*;
 import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 
@@ -24,7 +26,8 @@ public class HDSLib {
     private HDSLib(String databaseName) {
         connectionSource = null;
         try {
-            connectionSource = new JdbcConnectionSource("jdbc:h2:./db/" + databaseName);
+        	// TODO: How to properly get port?
+            connectionSource = new JdbcConnectionSource("jdbc:h2:./db/" + databaseName + Application.port);
             accounts = DaoManager.createDao(connectionSource, Account.class);
             transactions = DaoManager.createDao(connectionSource, Transaction.class);
         } catch (SQLException e) {
@@ -176,7 +179,7 @@ public class HDSLib {
         return new AccountState(account.getKeyHash(), account.getAmount(), pendingIncomingTransactions);
     }
 
-    public Transaction receiveAmount(int id, Date timestamp, byte[] sig) throws TransactionNotFoundException, AccountInsufficientAmountException, InvalidKeyException, SignatureException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException, TransactionAlreadyReceivedException {
+    public Transaction receiveAmount(int id, byte[] transactionSig, Date timestamp, byte[] sig) throws TransactionNotFoundException, AccountInsufficientAmountException, InvalidKeyException, SignatureException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException, TransactionAlreadyReceivedException {
     	Date timeReceived = new Date();
 		checkNullTimestamp(timestamp);
 		checkNullSignature(sig);
@@ -190,6 +193,11 @@ public class HDSLib {
         if (!HDSCrypto.validateTimestamp(timeReceived, timestamp)) {
         	throw new TimestampNotFreshException("Timestamp not fresh");
 		}
+		if (Arrays.equals(transaction.getSenderSig(),transactionSig)){
+        	throw new InvalidSignatureException("Sent transaction signature doesn't match transaction ID\n"+
+					"Received: " +  new String(Base64.getEncoder().encode(transactionSig))+
+					"\nExpected: " +  new String(Base64.getEncoder().encode(transaction.getSenderSig())));
+		}
 
 		//Account sourceAccount = transaction.getFrom();
 		Account destAccount = transaction.getTo();
@@ -201,6 +209,7 @@ public class HDSLib {
 
 		Signature s = HDSCrypto.verifySignature(destAccount.getKey());
 		s.update(BigInteger.valueOf(id).toByteArray());
+		s.update(transactionSig);
 		s.update(HDSCrypto.dateToString(timestamp).getBytes());
 		if(!s.verify(sig)){
 			throw new InvalidSignatureException("Signature not valid");

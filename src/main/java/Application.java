@@ -10,19 +10,21 @@ import io.javalin.Javalin;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
-import java.util.Base64;
-import java.util.Date;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 public class Application {
     private static PrivateKey serverPrivkey;
     private static PublicKey serverPubkey;
+    private static String address;
+    public static int port;
 
     public static ObjectNode signMessage(Object message, String timestamp) throws Exception{
         Signature s = HDSCrypto.createSignature(serverPrivkey);
@@ -35,8 +37,18 @@ public class Application {
     }
 
     public static void main(String[] args) {
+        if (args.length < 1) {
+            System.out.println("Please specify the port");
+            return;
+        }
+        port = Integer.valueOf(args[0]);
         generateKey();
-        Javalin app = Javalin.start(8080);
+        try {
+            address = InetAddress.getLocalHost().getHostAddress();
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        }
+        Javalin app = Javalin.start(port);
 
         app.exception(Exception.class, (e, ctx) -> {
             // handle general exceptions here
@@ -129,9 +141,10 @@ public class Application {
         // Receive Transaction
         app.post("/hds/receive/:id", ctx -> {
             int id = Integer.parseInt(Objects.requireNonNull(ctx.param("id")));
+            byte[] transactionSig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("transactionSig")));
             byte[] sig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("sig")));
             Date timestamp = HDSCrypto.stringToDate(ctx.formParam("timestamp"));
-            Transaction transaction = HDSLib.getInstance().receiveAmount(id, timestamp, sig);
+            Transaction transaction = HDSLib.getInstance().receiveAmount(id, transactionSig, timestamp, sig);
             if (transaction == null) {
                 ctx.status(500);
                 //ctx.result("Error confirming transaction.");
@@ -148,13 +161,25 @@ public class Application {
             ObjectNode ping = mapper.createObjectNode().put("ping", "ping");
             ctx.json(signMessage(ping, ctx.formParam("timestamp")));
         });
+
+        announceSelf();
+        System.out.println("\nServer listening on " + address + " at port " + port);
+        System.out.println("Write \'quit\' to stop the server\n");
+        while (true) {
+            Scanner scanner = new Scanner(System.in);
+            String c = scanner.nextLine();
+            if (c.equals("quit")){
+                app.stop();
+                return;
+            }
+        }
     }
 
     private static void generateKey() {
-        if (new File("server.priv").isFile()) {
+        if (new File("keys/server.priv").isFile()) {
             // Open keys from file
             try {
-                byte[] privkeyBytes = Files.readAllBytes(Paths.get("server.priv"));
+                byte[] privkeyBytes = Files.readAllBytes(Paths.get("keys/s"+port+".priv"));
                 PKCS8EncodedKeySpec privSpec = new PKCS8EncodedKeySpec(privkeyBytes);
                 KeyFactory factory = KeyFactory.getInstance("EC", "SunEC");
                 serverPrivkey = factory.generatePrivate(privSpec);
@@ -172,17 +197,40 @@ public class Application {
             serverPubkey = pair.getPublic();
 
             try {
-                FileOutputStream fos = new FileOutputStream("server.pub");
+                FileOutputStream fos = new FileOutputStream("keys/s"+port+".pub");
                 fos.write(serverPubkey.getEncoded());
                 fos.close();
 
-                fos = new FileOutputStream("server.priv");
+                fos = new FileOutputStream("keys/s"+port+".priv");
                 fos.write(serverPrivkey.getEncoded());
                 fos.close();
             } catch (java.io.IOException e) {
                 e.printStackTrace();
             }
         }
+    }
+
+    /* This is so clients can know what servers to talk to, and their respective public keys
+    *  It's a bit hardcoded, but there's no specification on how to do this
+    *  TODO: Ask if it must be done differently */
+    private static void announceSelf() {
+        String serverName = "s"+port;
+        String ip = "http://" + address + ":" + port;
+        File announcementFile = new File("servers/"+serverName);
+        announcementFile.getParentFile().mkdirs();
+        if (announcementFile.exists()) {
+            announcementFile.delete();
+        }
+        try {
+            FileOutputStream fos = new FileOutputStream("servers/"+serverName);
+            fos.write((serverName+"\n").getBytes(Charset.forName("UTF-8")));
+            fos.write((ip+"\n").getBytes(Charset.forName("UTF-8")));
+            fos.write(Base64.getEncoder().encode((serverPubkey.getEncoded())));
+            fos.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        announcementFile.deleteOnExit();
     }
 
     private static String urlDecode(String encoded) {

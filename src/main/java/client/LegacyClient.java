@@ -1,3 +1,5 @@
+package client;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mashape.unirest.http.HttpResponse;
 import com.mashape.unirest.http.JsonNode;
@@ -22,7 +24,8 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.Scanner;
 
-public class Client {
+@SuppressWarnings("ALL")
+public class LegacyClient {
 	public static boolean debug = false;
 	public static String server;
 	public static PublicKey serverKey;

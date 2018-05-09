@@ -55,7 +55,8 @@ public class TestAux {
 	}
 
 	public static void receiveAmountHelper(int id, PrivateKey privkey, Date timestamp, byte[] sig, HDSLib hdsLib) throws Exception{
-		hdsLib.receiveAmount(id, timestamp, sig);
+		//FIXME: get transaction signature (instead of null)
+		hdsLib.receiveAmount(id, null, timestamp, sig);
 	}
 
 	public static void receiveAmountHelper(int id, PrivateKey privkey, Date timestamp, HDSLib hdsLib) throws Exception{
