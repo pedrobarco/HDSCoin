@@ -432,7 +432,7 @@ public class Client {
         errors = new HashMap<>();
         validResponses = new LinkedList<>();
         String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
-        String transactionSig = account.getPendingTransactions().get(Integer.parseInt(transactionID)).getSignature();
+        String transactionSig = account.getPendingTransactions().get(transactionID).getSignature();
         if (transactionSig == null) {
             System.out.println("[ERROR] No such transaction ID");
             return;

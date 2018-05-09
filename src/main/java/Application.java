@@ -139,7 +139,7 @@ public class Application {
 
         // Receive Transaction
         app.post("/hds/receive/:id", ctx -> {
-            int id = Integer.parseInt(Objects.requireNonNull(ctx.param("id")));
+            String id = ctx.param("id");
             byte[] transactionSig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("transactionSig")));
             byte[] sig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("sig")));
             String previousTransaction = ctx.formParam("previousTransaction");

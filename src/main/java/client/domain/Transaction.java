@@ -1,7 +1,7 @@
 package client.domain;
 
 public class Transaction {
-    private int id;
+    private String id;
     private String from;
     private String to;
     private int amount;
@@ -9,7 +9,7 @@ public class Transaction {
     private String signature;
     private String transactionHash;
 
-    public Transaction(int id, String from, String to, int amount, String signature, String transactionHash){
+    public Transaction(String id, String from, String to, int amount, String signature, String transactionHash){
         this.id = id;
         this.from = from;
         this.to = to;

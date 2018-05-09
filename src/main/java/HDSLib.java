@@ -20,7 +20,7 @@ import java.util.List;
 public class HDSLib {
     private static HDSLib instance = null;
     private Dao<Account, String> accounts;
-    private Dao<Transaction, Integer> transactions;
+    private Dao<Transaction, String> transactions;
     private ConnectionSource connectionSource;
 
     private HDSLib(String databaseName) {
@@ -157,13 +157,15 @@ public class HDSLib {
 				return null;
 			}
 
+			String newId = "0-"+sourceKeyHash; // TODO: Honestly this is stupid, just put the int in Transaction as well
 			if(actualPreviousTransaction != null){
+				newId = calculateNextId(actualPreviousTransaction);
 				if (!previousTransaction.equals(actualPreviousTransactionHash)){
 					throw new WrongPreviousTransactionException(previousTransaction, actualPreviousTransactionHash);
 				}
 			}
 
-			Transaction transaction = new Transaction(sourceAccount, destAccount, amount, timestamp, actualPreviousTransactionHash, sig);
+			Transaction transaction = new Transaction(newId, sourceAccount, destAccount, amount, timestamp, actualPreviousTransactionHash, sig);
 			sourceAccount.addAmount(-amount);
 			transaction.setLast(true);
 			if (actualPreviousTransaction != null) {
@@ -198,7 +200,7 @@ public class HDSLib {
         return new AccountState(account.getKeyHash(), account.getAmount(), pendingIncomingTransactions);
     }
 
-    public Transaction receiveAmount(int id, byte[] transactionSig, String previousTransaction, String timestamp, byte[] sig) throws TransactionNotFoundException, AccountInsufficientAmountException, InvalidKeyException, SignatureException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException, TransactionAlreadyReceivedException, WrongPreviousTransactionException {
+    public Transaction receiveAmount(String id, byte[] transactionSig, String previousTransaction, String timestamp, byte[] sig) throws TransactionNotFoundException, AccountInsufficientAmountException, InvalidKeyException, SignatureException, TimestampNotFreshException, InvalidSignatureException, NullArgumentException, TransactionAlreadyReceivedException, WrongPreviousTransactionException {
     	Date timeReceived = new Date();
 		checkNullTimestamp(timestamp);
 		checkNullSignature(sig);
@@ -227,7 +229,7 @@ public class HDSLib {
 		}
 
 		Signature s = HDSCrypto.verifySignature(destAccount.getKey());
-		s.update(BigInteger.valueOf(id).toByteArray());
+		s.update(id.getBytes());
 		s.update(transactionSig);
 		s.update(previousTransaction.getBytes());
 		s.update(timestamp.getBytes());
@@ -255,14 +257,16 @@ public class HDSLib {
 					return null;
 				}
 
+				String newId = "0-"+destAccount.getKeyHash();
 				if(actualPreviousTransaction != null){
 					if (!previousTransaction.equals(actualPreviousTransactionHash)){
 						throw new WrongPreviousTransactionException(previousTransaction, actualPreviousTransactionHash); // TODO: Test this exception
 					}
+					newId = calculateNextId(actualPreviousTransaction);
 				}
 
 				destAccount.addAmount(transaction.getAmount());
-				Transaction newTransaction = Transaction.ReceiveTransaction(transaction, timestamp, previousTransaction, sig);
+				Transaction newTransaction = Transaction.ReceiveTransaction(newId, transaction, timestamp, previousTransaction, sig);
 				newTransaction.setLast(true);
 				if (actualPreviousTransaction != null) {
 					actualPreviousTransaction.setLast(false);
@@ -306,7 +310,7 @@ public class HDSLib {
         return account;
     }
 
-    public Transaction getTransaction(int id) {
+    public Transaction getTransaction(String id) {
         Transaction transaction = null;
         try {
             transaction = transactions.queryForId(id);
@@ -362,4 +366,9 @@ public class HDSLib {
 			throw new NullArgumentException("Null or empty timestamp");
 		}
 	}
+
+	private String calculateNextId(Transaction transaction) {
+    	int c = Integer.parseInt(transaction.getId().substring(0, transaction.getId().indexOf("-"))) + 1;
+		return c + transaction.getId().substring(transaction.getId().indexOf("-"));
+    }
 }

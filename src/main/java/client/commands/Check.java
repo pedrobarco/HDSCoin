@@ -56,16 +56,16 @@ public class Check implements Runnable {
                 System.out.println("Balance: " + jsonResponse.getBody().getObject().get("amount"));
                 System.out.println("Pending transactions: ");
                 JSONArray array = jsonResponse.getBody().getObject().getJSONArray("pendingTransactions");
-                Map<Integer, Transaction> pendingTransactions = new HashMap<>();
+                Map<String, Transaction> pendingTransactions = new HashMap<>();
                 for(int i = 0; i< array.length(); i++){
                     JSONObject transaction = array.getJSONObject(i);
-                    Transaction t = new Transaction(transaction.getInt("id"),
+                    Transaction t = new Transaction(transaction.getString("id"),
                             transaction.getJSONObject("from").getString("keyHash"),
                             transaction.getJSONObject("to").getString("keyHash"),
                             transaction.getInt("amount"),
                             transaction.getString("sig"),
                             transaction.getString("transactionHash"));
-                    pendingTransactions.put(transaction.getInt("id"), t);
+                    pendingTransactions.put(transaction.getString("id"), t);
                 }
                 Client.callbackCheck(server,new Account(jsonResponse.getBody().getObject().getInt("amount"), pendingTransactions));
             }

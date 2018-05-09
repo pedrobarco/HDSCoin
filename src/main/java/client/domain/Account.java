@@ -4,9 +4,9 @@ import java.util.Map;
 
 public class Account {
     private int balance;
-    private Map<Integer, Transaction> pendingTransactions;
+    private Map<String, Transaction> pendingTransactions;
 
-    public Account(int balance, Map<Integer, Transaction> pendingTransactions) {
+    public Account(int balance, Map<String, Transaction> pendingTransactions) {
         this.balance = balance;
         this.pendingTransactions = pendingTransactions;
     }
@@ -15,7 +15,7 @@ public class Account {
         return balance;
     }
 
-    public Map<Integer, Transaction> getPendingTransactions() {
+    public Map<String, Transaction> getPendingTransactions() {
         return pendingTransactions;
     }
 

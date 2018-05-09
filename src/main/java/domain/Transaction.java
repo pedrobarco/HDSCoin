@@ -14,8 +14,10 @@ import java.util.Date;
 @DatabaseTable(tableName = "transactions")
 public class Transaction implements Serializable{
 
-	@DatabaseField(generatedId=true)
-    private int id;
+	@DatabaseField(id=true)
+    private String id;
+    @DatabaseField
+    private int count;
 	@DatabaseField
     private boolean last;
     @DatabaseField(foreign = true, foreignAutoRefresh = true)
@@ -50,11 +52,12 @@ public class Transaction implements Serializable{
 
     }
 
-    public Transaction(Account from, Account to, int amount, String timestamp, String previousTransaction, byte[] sig) {
-        this(from, to, amount, timestamp, true, false, previousTransaction, sig);
+    public Transaction(String id, Account from, Account to, int amount, String timestamp, String previousTransaction, byte[] sig) {
+        this(id, from, to, amount, timestamp, true, false, previousTransaction, sig);
     }
 
-    public Transaction(Account from, Account to, int amount, String timestamp, boolean pending, boolean receiving,String previousTransaction, byte[] sig) {
+    public Transaction(String id, Account from, Account to, int amount, String timestamp, boolean pending, boolean receiving,String previousTransaction, byte[] sig) {
+        this.id = id;
         this.from = from;
         this.to = to;
         this.amount = amount;
@@ -84,8 +87,8 @@ public class Transaction implements Serializable{
         }
     }
 
-    public static Transaction ReceiveTransaction(Transaction transaction, String timestamp, String previousTransaction, byte[] sig) {
-        Transaction receive = new Transaction(transaction.from, transaction.to, transaction.amount, timestamp, false, true, previousTransaction, sig);
+    public static Transaction ReceiveTransaction(String id, Transaction transaction, String timestamp, String previousTransaction, byte[] sig) {
+        Transaction receive = new Transaction(id, transaction.from, transaction.to, transaction.amount, timestamp, false, true, previousTransaction, sig);
         transaction.setPending(false);
         receive.setSenderSig(transaction.getSig());
         return receive;
@@ -122,11 +125,11 @@ public class Transaction implements Serializable{
         this.amount = amount;
     }
 
-    public void setId(int id) {
+    public void setId(String id) {
         this.id = id;
     }
 
-    public int getId() {
+    public String getId() {
         return id;
     }
 

@@ -63,13 +63,13 @@ public class Audit implements Runnable {
                 LinkedList<Transaction> transactionList = new LinkedList<>();
                 for(int i = array.length()-1; i>=0 ; i--){
                     JSONObject transaction = array.getJSONObject(i);
-                    Transaction t = new Transaction(transaction.getInt("id"),
+                    Transaction t = new Transaction(transaction.getString("id"),
                             transaction.getJSONObject("from").getString("keyHash"),
                             transaction.getJSONObject("to").getString("keyHash"),
                             transaction.getInt("amount"),
                             transaction.getString("sig"),
                             transaction.getString("transactionHash"));
-                    System.out.println("[DEBUG] verifying transaction with id " + transaction.getInt("id"));
+                    System.out.println("[DEBUG] verifying transaction with id " + transaction.getString("id"));
                     Signature s = null;
                     if (transaction.getBoolean("receiving")){
                         // Transaction comes from a receive operation
@@ -79,7 +79,7 @@ public class Audit implements Runnable {
                             s.update(Base64.getDecoder().decode(transaction.getString("senderSig")));
                             s.update(transaction.getString("timestamp").getBytes());
                             if (s.verify(Base64.getDecoder().decode(transaction.getString("sig")))){
-                                Client.callbackError(server, "Failed to verify transaction " + transaction.getInt("id"));
+                                Client.callbackError(server, "Failed to verify transaction " + transaction.getString("id"));
                                 return;
                             }
                         } catch (InvalidKeyException | SignatureException e) {
@@ -100,7 +100,7 @@ public class Audit implements Runnable {
                             s.update(transaction.getString("timestamp").getBytes());
                             //System.out.println("[HEREV] timestamp: " + transaction.getString("timestamp"));
                             if (!s.verify(Base64.getDecoder().decode(transaction.getString("sig")))){
-                                Client.callbackError(server, "Failed to verify transaction " + transaction.getInt("id"));
+                                Client.callbackError(server, "Failed to verify transaction " + transaction.getString("id"));
                                 return;
                             }
                         } catch (InvalidKeyException | SignatureException e) {

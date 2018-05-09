@@ -82,7 +82,7 @@ public class Receive implements Runnable {
         byte[] sig = null;
         try {
             s = createSignature(privateKey);
-            s.update(BigInteger.valueOf(Integer.parseInt(transactionID)).toByteArray());
+            s.update(transactionID.getBytes());
             s.update(Base64.getDecoder().decode(transactionSig));
             s.update(previousTransaction.getBytes());
             s.update(timestamp.getBytes());

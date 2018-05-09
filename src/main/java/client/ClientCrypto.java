@@ -117,7 +117,7 @@ public class ClientCrypto {
     }
 
     public static String prettyPrintPendingTransaction(JSONObject transaction) {
-        String id = Integer.toString(transaction.getInt("id"));
+        String id = transaction.getString("id");
         String amount = Integer.toString(transaction.getInt("amount"));
         String from = transaction.getJSONObject("from").getString("keyHash");
         String signature = transaction.getString("sig");
@@ -125,7 +125,7 @@ public class ClientCrypto {
     }
 
     public static String prettyPrintTransaction(JSONObject transaction) {
-        String id = Integer.toString(transaction.getInt("id"));
+        String id = transaction.getString("id");
         String amount = Integer.toString(transaction.getInt("amount"));
         String from = transaction.getJSONObject("from").getString("keyHash");
         String to = transaction.getJSONObject("to").getString("keyHash");
