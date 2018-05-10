@@ -1,8 +1,10 @@
 package domain;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.j256.ormlite.field.DataType;
 import com.j256.ormlite.field.DatabaseField;
 import com.j256.ormlite.table.DatabaseTable;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.Serializable;
 import java.security.MessageDigest;
@@ -12,12 +14,10 @@ import java.util.Date;
 
 @SuppressWarnings("serial")
 @DatabaseTable(tableName = "transactions")
-public class Transaction implements Serializable{
+public class Transaction implements Serializable, Comparable{
 
 	@DatabaseField(id=true)
     private String id;
-    @DatabaseField
-    private int count;
 	@DatabaseField
     private boolean last;
     @DatabaseField(foreign = true, foreignAutoRefresh = true)
@@ -38,7 +38,6 @@ public class Transaction implements Serializable{
     @DatabaseField
     private boolean pending;
 
-    //@DatabaseField(dataType = DataType.DATE)
     @DatabaseField
     private String timestamp;
     @DatabaseField(dataType=DataType.BYTE_ARRAY)
@@ -93,13 +92,6 @@ public class Transaction implements Serializable{
         receive.setSenderSig(transaction.getSig());
         return receive;
     }
-
-    /*public void complete(Date timestamp, String previousTransaction, byte[] sig){
-        this.pending = false;
-        this.receivedTimestamp = timestamp;
-        this.previousTransactionReceiver = previousTransaction;
-        this.receiverSig = sig;
-    }*/
 
     public Account getFrom() {
         return from;
@@ -197,38 +189,6 @@ public class Transaction implements Serializable{
         this.owner = owner;
     }
 
-    @Override
-    public String toString() {
-        return "From: " + from.getKey() + "\nTo: " + to.getKey() + "\nAmount: " + amount;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null) {
-            return false;
-        }
-        if (!Transaction.class.isAssignableFrom(obj.getClass())) {
-            return false;
-        }
-        final Transaction other = (Transaction) obj;
-        if (this.id != other.id) {
-            return false;
-        }
-        if (this.from.getKeyHash() != other.from.getKeyHash()){
-            return false;
-        }
-        if (this.to.getKeyHash() != other.to.getKeyHash()){
-            return false;
-        }
-        if (this.amount != other.amount){
-            return false;
-        }
-        if (this.pending != other.pending){
-            return false;
-        }
-        return true;
-    }
-
     public byte[] getSenderSig() {
         return senderSig;
     }
@@ -243,5 +203,51 @@ public class Transaction implements Serializable{
 
     public void setSenderId(int senderId) {
         this.senderId = senderId;
+    }
+
+    @Override
+    public String toString() {
+        return "From: " + from.getKey() + "\nTo: " + to.getKey() + "\nAmount: " + amount;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (!Transaction.class.isAssignableFrom(obj.getClass())) {
+            return false;
+        }
+        final Transaction other = (Transaction) obj;
+        if (!this.id.equals(other.id)) {
+            return false;
+        }
+        if (!this.from.getKeyHash().equals(other.from.getKeyHash())){
+            return false;
+        }
+        if (!this.to.getKeyHash().equals(other.to.getKeyHash())){
+            return false;
+        }
+        if (this.amount != other.amount){
+            return false;
+        }
+        if (this.pending != other.pending){
+            return false;
+        }
+        if (!this.transactionHash.equals(other.transactionHash)){
+            return false;
+        }
+        return true;
+    }
+
+
+    @Override
+    public int compareTo(@NotNull Object o) {
+        Transaction other = (Transaction) o;
+
+        Integer thisIndex = Integer.parseInt(this.getId().substring(0, this.getId().indexOf("-")));
+        Integer otherIndex = Integer.parseInt(other.getId().substring(0, other.getId().indexOf("-")));
+
+        return thisIndex.compareTo(otherIndex);
     }
 }

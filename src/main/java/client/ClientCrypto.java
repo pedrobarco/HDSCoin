@@ -76,7 +76,7 @@ public class ClientCrypto {
         try {
             serverSig = Base64.getDecoder().decode(response.getObject().getString("serverSig"));
         } catch (JSONException e) {
-            if (debug) {
+            if (debug == Client.debugMode.VERBOSE) {
                 System.out.println("[DEBUG] Couldn't find the serverSig");
             }
             return false;
@@ -86,13 +86,13 @@ public class ClientCrypto {
             Signature serverSigVerify = verifySignature(serverKey);
             serverSigVerify.update(timestamp.getBytes());
             if (!serverSigVerify.verify(serverSig)){
-                if (debug) {
+                if (debug == Client.debugMode.VERBOSE) {
                     System.out.println("[DEBUG] Failed to verify the serverSig");
                 }
                 return false;
             }
         } catch (InvalidKeyException | SignatureException e) {
-            if (debug) {
+            if (debug == Client.debugMode.VERBOSE) {
                 System.out.println("[DEBUG] Exception while verifying serverSig:");
                 System.out.println("[DEBUG] " + e.getMessage());
             }
@@ -112,6 +112,8 @@ public class ClientCrypto {
             Object json = mapper.readValue(jsonNode.toString(), Object.class);
             return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(json);
         } catch (Exception e) {
+            System.out.println("AHHHHHHHHHHHHHHHHHHHHHHHHHHHHH");
+            e.printStackTrace();
             return "Sorry, pretty print didn't work";
         }
     }

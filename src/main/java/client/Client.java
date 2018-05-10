@@ -4,6 +4,7 @@ import client.commands.*;
 import client.domain.Account;
 import client.domain.Server;
 import client.domain.Transaction;
+import com.mashape.unirest.http.JsonNode;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -18,6 +19,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static client.ClientCrypto.generateCertificate;
+import static client.ClientCrypto.prettyPrintJsonString;
 
 @SuppressWarnings("Duplicates")
 public class Client {
@@ -31,13 +33,16 @@ public class Client {
     private static int responses;
     private static Map<String, Integer> errors;
     private static List<Object> validResponses;
+    private static List<JsonNode> jsonResponses; // Used to writeback
 
     private static List<Transaction> transactionList;
     private static Account account;
 
     private static final Object syncObject = new Object();
 
-    public static boolean debug = true;
+    // Verbose debug mode will make ugly threaded prints
+    public enum debugMode {NONE, NORMAL, VERBOSE}
+    public static debugMode debug = debugMode.NORMAL;
 
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
@@ -285,7 +290,7 @@ public class Client {
         String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
         String signature = Register.sign(publicKey, timestamp, privateKey);
 
-        if (debug) {
+        if (debug == debugMode.NORMAL) {
             System.out.println("--- Sending ---");
             System.out.println("Public key: " + publicKeyHash);
             System.out.println("Timestamp: " + timestamp);
@@ -305,7 +310,7 @@ public class Client {
                 System.out.println("[DEBUG] Thread interrupted");
             }
         }
-        if (debug) {
+        if (debug == debugMode.NORMAL) {
             System.out.println("[DEBUG] Received majority responses");
 
             if (validResponses.isEmpty()) {
@@ -338,7 +343,7 @@ public class Client {
     public static synchronized void callbackRegister(Server server, String response){
         responses = responses+1;
         validResponses.add(response);
-        if (debug) {
+        if (debug == debugMode.VERBOSE) {
             System.out.println("[DEBUG] Received " + responses + " responses so far");
         }
         // TODO: determine how many are needed for majority
@@ -360,7 +365,7 @@ public class Client {
         }
         String signature = Send.sign(publicKeyHash, dest, amount, previousTransaction, timestamp, privateKey);
 
-        if (debug) {
+        if (debug == debugMode.NORMAL) {
             System.out.println("--- Sending ---");
             System.out.println("Source hash: " + publicKeyHash);
             System.out.println("Destination hash: " + dest);
@@ -383,7 +388,7 @@ public class Client {
                 System.out.println("[DEBUG] Thread interrupted");
             }
         }
-        if (debug) {
+        if (debug == debugMode.NORMAL) {
             System.out.println("[DEBUG] Received majority responses");
 
             if (validResponses.isEmpty()) {
@@ -416,7 +421,7 @@ public class Client {
     public static synchronized void callbackSend(Server server, String response){
         responses = responses+1;
         validResponses.add(response);
-        if (debug) {
+        if (debug == debugMode.VERBOSE) {
             System.out.println("[DEBUG] Received " + responses + " responses so far");
         }
         // TODO: determine how many are needed for majority
@@ -443,7 +448,7 @@ public class Client {
         }
         String signature = Receive.sign(transactionID, transactionSig, previousTransaction, timestamp, privateKey);
 
-        if (debug) {
+        if (debug == debugMode.NORMAL) {
             System.out.println("--- Sending ---");
             System.out.println("Transaction ID: " + transactionID);
             System.out.println("Transaction Sig: " + transactionSig);
@@ -464,7 +469,7 @@ public class Client {
                 System.out.println("[DEBUG] Thread interrupted");
             }
         }
-        if (debug) {
+        if (debug == debugMode.NORMAL) {
             System.out.println("[DEBUG] Received majority responses");
 
             if (validResponses.isEmpty()) {
@@ -497,7 +502,7 @@ public class Client {
     public static synchronized void callbackReceive(Server server, String response){
         responses = responses+1;
         validResponses.add(response);
-        if (debug) {
+        if (debug == debugMode.VERBOSE) {
             System.out.println("[DEBUG] Received " + responses + " responses so far");
         }
         // TODO: determine how many are needed for majority
@@ -513,7 +518,7 @@ public class Client {
         errors = new HashMap<>();
         validResponses = new LinkedList<>();
         String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
-        if (debug) {
+        if (debug == debugMode.NORMAL) {
             System.out.println("--- Sending ---");
             System.out.println("Account Hash: " + publicKeyHash);
             System.out.println("Timestamp: " + timestamp);
@@ -532,7 +537,7 @@ public class Client {
                 System.out.println("[DEBUG] Thread interrupted");
             }
         }
-        if (debug) {
+        if (debug == debugMode.NORMAL) {
             System.out.println("[DEBUG] Received majority responses");
         }
         if (validResponses.isEmpty()) {
@@ -568,7 +573,7 @@ public class Client {
     public static synchronized void callbackCheck(Server server, Account response){
         responses = responses+1;
         validResponses.add(response);
-        if (debug) {
+        if (debug == debugMode.VERBOSE) {
             System.out.println("[DEBUG] Received " + responses + " responses so far");
         }
         // TODO: determine how many are needed for majority
@@ -583,8 +588,9 @@ public class Client {
         responses = 0;
         errors = new HashMap<>();
         validResponses = new LinkedList<>();
+        jsonResponses = new LinkedList<>();
         String timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
-        if (debug) {
+        if (debug == debugMode.NORMAL) {
             System.out.println("--- Sending ---");
             System.out.println("Account Hash: " + publicKeyHash);
             System.out.println("Timestamp: " + timestamp);
@@ -603,7 +609,7 @@ public class Client {
                 System.out.println("[DEBUG] Thread interrupted");
             }
         }
-        if (debug) {
+        if (debug == debugMode.NORMAL) {
             System.out.println("[DEBUG] Received majority responses");
         }
         if (validResponses.isEmpty()) {
@@ -614,18 +620,41 @@ public class Client {
         }
         int maxOps = 0;
         List<Transaction> chosenList = null;
+        JsonNode writebackValue = null;
         for (Object response:validResponses){
+            int index = validResponses.indexOf(response);
             List<Transaction> l = (List<Transaction>) response;
             if (l.size() > maxOps) {
                 maxOps = l.size();
                 chosenList = l;
+                writebackValue = jsonResponses.get(index);
             }
         }
 
-        if (debug){
-            System.out.println("[DEBUG] maxOps: " + maxOps);
+        if (debug == debugMode.NORMAL) {
+            System.out.println("[DEBUG] Writing back");
+        }
+        // -------------- Writeback --------------------
+        timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
+        responses = 0;
+        errors = new HashMap<>();
+        validResponses = new LinkedList<>();
+        for (Server server:servers){
+            Thread t = new Thread(new Writeback(server, publicKeyHash, writebackValue, timestamp));
+            t.start();
         }
 
+        synchronized(syncObject) {
+            try {
+                syncObject.wait();
+            } catch (InterruptedException e) {
+                System.out.println("[DEBUG] Thread interrupted");
+            }
+        }
+        if (debug == debugMode.NORMAL) {
+            System.out.println("[DEBUG] Finishing writeback");
+        }
+        //----------- End of Writeback -----------------
         if (print) {
             if (chosenList == null) {
                 System.out.println("No transactions found for " + publicKeyHash);
@@ -642,12 +671,26 @@ public class Client {
         return true;
     }
 
-    public static synchronized void callbackAudit(Server server, List<Transaction> response){
+    public static synchronized void callbackAudit(Server server, List<Transaction> response, JsonNode json){
         responses = responses+1;
         validResponses.add(response);
-        if (debug) {
+        jsonResponses.add(json);
+        if (debug == debugMode.VERBOSE) {
             System.out.println("[DEBUG] Added transaction list of size " + response.size());
             System.out.println("[DEBUG] Received " + responses + " responses so far");
+        }
+        // TODO: determine how many are needed for majority
+        if (responses >= 2){
+            synchronized (syncObject) {
+                syncObject.notify();
+            }
+        }
+    }
+
+    public static synchronized void callbackWriteback(Server server, String response){
+        responses = responses+1;
+        if (debug == debugMode.VERBOSE) {
+            System.out.println("[DEBUG] Received " + responses + " responses for writeback so far");
         }
         // TODO: determine how many are needed for majority
         if (responses >= 2){
@@ -665,7 +708,7 @@ public class Client {
             errors.put(response, 1);
         }
 
-        if (debug) {
+        if (debug == debugMode.VERBOSE) {
             System.out.println("[DEBUG] Got error: " + response);
             System.out.println("[DEBUG] Received " + responses + " responses so far");
         }

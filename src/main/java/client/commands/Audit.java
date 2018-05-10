@@ -7,6 +7,7 @@ import com.mashape.unirest.http.HttpResponse;
 import com.mashape.unirest.http.JsonNode;
 import com.mashape.unirest.http.Unirest;
 import com.mashape.unirest.http.exceptions.UnirestException;
+import org.apache.http.conn.HttpHostConnectException;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -45,23 +46,21 @@ public class Audit implements Runnable {
                     .field("timestamp", timestamp)
                     .asJson();
 
-            if (debug) {
+            if (debug == Client.debugMode.VERBOSE) {
                 System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
             }
 
             if (!checkServerSignature(jsonResponse.getBody(), timestamp, server.getPublicKey())) {
                 Client.callbackError(server, "Could not verify the server's signature");
                 return;
-            }
-            else if (jsonResponse.getStatus() == 400){
+            } else if (jsonResponse.getStatus() == 400) {
                 Client.callbackError(server, jsonResponse.getBody().getObject().getString("message"));
                 return;
-            }
-            else if (jsonResponse.getStatus() == 200) {
+            } else if (jsonResponse.getStatus() == 200) {
                 JSONArray array = jsonResponse.getBody().getObject().getJSONArray("transactions");
                 System.out.println("[DEBUG] verifying " + array.length() + " transactions from the audit");
                 LinkedList<Transaction> transactionList = new LinkedList<>();
-                for(int i = array.length()-1; i>=0 ; i--){
+                for (int i = array.length() - 1; i >= 0; i--) {
                     JSONObject transaction = array.getJSONObject(i);
                     Transaction t = new Transaction(transaction.getString("id"),
                             transaction.getJSONObject("from").getString("keyHash"),
@@ -71,14 +70,14 @@ public class Audit implements Runnable {
                             transaction.getString("transactionHash"));
                     System.out.println("[DEBUG] verifying transaction with id " + transaction.getString("id"));
                     Signature s = null;
-                    if (transaction.getBoolean("receiving")){
+                    if (transaction.getBoolean("receiving")) {
                         // Transaction comes from a receive operation
                         try {
                             s = verifySignature(publicKey);
                             s.update(BigInteger.valueOf(transaction.getInt("senderId")).toByteArray());
                             s.update(Base64.getDecoder().decode(transaction.getString("senderSig")));
                             s.update(transaction.getString("timestamp").getBytes());
-                            if (s.verify(Base64.getDecoder().decode(transaction.getString("sig")))){
+                            if (s.verify(Base64.getDecoder().decode(transaction.getString("sig")))) {
                                 Client.callbackError(server, "Failed to verify transaction " + transaction.getString("id"));
                                 return;
                             }
@@ -90,16 +89,11 @@ public class Audit implements Runnable {
                         try {
                             s = verifySignature(publicKey);
                             s.update(transaction.getJSONObject("from").getString("keyHash").getBytes());
-                            //System.out.println("[HEREV] from: " + transaction.getJSONObject("from").getString("keyHash"));
                             s.update(transaction.getJSONObject("to").getString("keyHash").getBytes());
-                            //System.out.println("[HEREV] to: " + transaction.getJSONObject("to").getString("keyHash"));
                             s.update(BigInteger.valueOf(transaction.getInt("amount")).toByteArray());
-                            //System.out.println("[HEREV] amount: " + transaction.getInt("amount"));
                             s.update(transaction.getString("previousTransaction").getBytes());
-                            //System.out.println("[HEREV] prevTrans: " + transaction.getString("previousTransaction"));
                             s.update(transaction.getString("timestamp").getBytes());
-                            //System.out.println("[HEREV] timestamp: " + transaction.getString("timestamp"));
-                            if (!s.verify(Base64.getDecoder().decode(transaction.getString("sig")))){
+                            if (!s.verify(Base64.getDecoder().decode(transaction.getString("sig")))) {
                                 Client.callbackError(server, "Failed to verify transaction " + transaction.getString("id"));
                                 return;
                             }
@@ -109,15 +103,15 @@ public class Audit implements Runnable {
                     }
                     transactionList.addFirst(t);
                 }
-                Client.callbackAudit(server, transactionList);
+                Client.callbackAudit(server, transactionList, jsonResponse.getBody());
                 return;
-            }
-            else {
+            } else {
                 Client.callbackError(server, "Unexpected status code: " + jsonResponse.getStatus());
                 return;
             }
         } catch (UnirestException e) {
-            e.printStackTrace();
+            Client.callbackError(server, e.getMessage());
+            return;
         }
     }
 }

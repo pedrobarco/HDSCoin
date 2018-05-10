@@ -56,7 +56,7 @@ public class Receive implements Runnable {
                     .field("sig", sig)
                     .asJson();
 
-            if (debug) {
+            if (debug == Client.debugMode.VERBOSE) {
                 System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
             }
 
@@ -73,7 +73,8 @@ public class Receive implements Runnable {
                 Client.callbackError(server, "Unexpected status code: " + jsonResponse.getStatus());
             }
         } catch (UnirestException e) {
-            e.printStackTrace();
+            Client.callbackError(server, e.getMessage());
+            return;
         }
     }
 

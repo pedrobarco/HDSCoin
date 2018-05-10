@@ -41,7 +41,7 @@ public class Check implements Runnable {
                     .field("timestamp", timestamp)
                     .asJson();
 
-            if (debug) {
+            if (debug == Client.debugMode.VERBOSE) {
                 System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
             }
 
@@ -73,7 +73,8 @@ public class Check implements Runnable {
                 Client.callbackError(server,"Unexpected status code: " + jsonResponse.getStatus());
             }
         } catch (UnirestException e) {
-            e.printStackTrace();
+            Client.callbackError(server, e.getMessage());
+            return;
         }
     }
 }

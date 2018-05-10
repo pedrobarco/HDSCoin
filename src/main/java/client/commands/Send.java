@@ -14,10 +14,7 @@ import java.util.Base64;
 import java.util.Date;
 
 import static client.Client.debug;
-import static client.ClientCrypto.checkServerSignature;
-import static client.ClientCrypto.createSignature;
-import static client.ClientCrypto.urlEncode;
-import static client.LegacyClient.prettyPrintJsonString;
+import static client.ClientCrypto.*;
 
 @SuppressWarnings("Duplicates")
 public class Send implements Runnable{
@@ -53,7 +50,7 @@ public class Send implements Runnable{
                     .field("sig", sig)
                     .asJson();
 
-            if (debug) {
+            if (debug == Client.debugMode.VERBOSE) {
                 System.out.println(prettyPrintJsonString(jsonResponse.getBody()));
             }
 
@@ -70,7 +67,8 @@ public class Send implements Runnable{
                 Client.callbackError(server, "Unexpected status code: " + jsonResponse.getStatus());
             }
         } catch (UnirestException e) {
-            e.printStackTrace();
+            Client.callbackError(server, e.getMessage());
+            return;
         }
     }
 

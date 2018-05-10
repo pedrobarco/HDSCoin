@@ -1,3 +1,6 @@
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.j256.ormlite.dao.Dao;
 import com.j256.ormlite.dao.DaoManager;
 import com.j256.ormlite.jdbc.JdbcConnectionSource;
@@ -11,10 +14,7 @@ import exceptions.*;
 import java.math.BigInteger;
 import java.security.*;
 import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 
 
 public class HDSLib {
@@ -299,6 +299,54 @@ public class HDSLib {
         }
         return getAccountTransactions(keyHash);
     }
+
+    // TODO: Test this?
+    public void joinLedger(String keyHash, JsonNode json) throws WritebackMismatchedTransactionException {
+    	List<Transaction> toAdd = new LinkedList<>();
+		ObjectMapper mapper = new ObjectMapper();
+		for (JsonNode transaction:json.get("transactions")){
+			String id = transaction.get("id").asText();
+			Account from = getAccount(transaction.get("from").get("keyHash").asText());
+			Account to = getAccount(transaction.get("to").get("keyHash").asText());
+			int amount = transaction.get("amount").asInt();
+			//Account owner = getAccount(transaction.get("owner").get("keyHash").asText());
+			boolean receiving = transaction.get("receiving").asBoolean();
+			int senderId = transaction.get("senderId").asInt();
+			byte[] senderSig = Base64.getDecoder().decode(transaction.get("senderSig").asText());
+			boolean pending = transaction.get("pending").asBoolean();
+			String timestamp = transaction.get("timestamp").asText();
+			byte[] sig = Base64.getDecoder().decode(transaction.get("sig").asText());
+			//String transactionHash = transaction.get("transactionHash").asText();
+			String previousTransaction = transaction.get("previousTransaction").asText();
+
+			Transaction t = new Transaction(id, from, to, amount, timestamp, pending, receiving, previousTransaction, sig);
+			t.setSenderSig(senderSig);
+			t.setSenderId(senderId);
+			t.setLast(false);
+
+			toAdd.add(t);
+		}
+
+		Collections.sort(toAdd);
+		List<Transaction> current = getAccountTransactions(keyHash);
+		Collections.sort(current);
+		System.out.println("[WRITEBACK RESULTS]");
+		for (int i = 0; i<toAdd.size(); i++) {
+			if (i >= current.size()) {
+				System.out.println("Adding " + toAdd.get(i).getId());
+				try {
+					transactions.create(toAdd.get(i));
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			} else if(current.get(i).equals(toAdd.get(i))){
+				System.out.println("Already have " + toAdd.get(i).getId());
+			} else {
+				System.out.println("Mismatch in " + toAdd.get(i).getId());
+				throw new WritebackMismatchedTransactionException(current.get(i).getId(), toAdd.get(i).getId());
+			}
+		}
+	}
 
     public Account getAccount(String keyHash) {
         Account account = null;

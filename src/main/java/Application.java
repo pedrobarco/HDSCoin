@@ -161,6 +161,20 @@ public class Application {
             ctx.json(signMessage(ping, ctx.formParam("timestamp")));
         });
 
+        // Receive a writeback
+        app.post("/hds/wb", ctx -> {
+            String key = ctx.formParam("key");
+            if (ctx.formParam("transactionList") != null) {
+                ObjectMapper mapper = new ObjectMapper();
+                JsonNode transactions = mapper.readTree(ctx.formParam("transactionList"));
+                HDSLib.getInstance().joinLedger(key, transactions);
+            }
+            ctx.status(201);
+            ObjectMapper mapper = new ObjectMapper();
+            ObjectNode ping = mapper.createObjectNode().put("ack", "ack");
+            ctx.json(signMessage(ping, ctx.formParam("timestamp")));
+        });
+
         announceSelf();
         System.out.println("\nServer listening on " + address + " at port " + port);
         System.out.println("Write \'quit\' to stop the server\n");
@@ -209,9 +223,7 @@ public class Application {
         }
     }
 
-    /* This is so clients can know what servers to talk to, and their respective public keys
-    *  It's a bit hardcoded, but there's no specification on how to do this
-    *  TODO: Ask if it must be done differently */
+    /* This is so clients can know what servers to talk to, and their respective public keys */
     private static void announceSelf() {
         String serverName = "s"+port;
         String ip = "http://" + address + ":" + port;
