@@ -209,8 +209,7 @@ public class Application {
     }
 
     public static void generateKey() {
-        File keydir = new File("keys");
-        keydir.mkdir();
+        new File("keys/").mkdirs();
         if (new File("keys/s"+port+".ks").isFile()) {
             // Open keys from file
             try {
