@@ -18,12 +18,14 @@ public class Writeback implements Runnable {
     private String publicKeyHash;
     private JsonNode json;
     private String timestamp;
+    private int opid;
 
-    public Writeback(Server server, String publicKeyHash, JsonNode json, String timestamp){
+    public Writeback(Server server, String publicKeyHash, JsonNode json, String timestamp, int opid){
         this.server = server;
         this.publicKeyHash = publicKeyHash;
         this.json = json;
         this.timestamp = timestamp;
+        this.opid = opid;
     }
 
     @Override
@@ -46,19 +48,19 @@ public class Writeback implements Runnable {
             }
 
             if (!checkServerSignature(jsonResponse.getBody(), timestamp, server.getPublicKey())) {
-                Client.callbackError(server, "Could not verify the server's signature");
+                Client.callbackError(server, "Could not verify the server's signature", opid);
             }
             else if (jsonResponse.getStatus() == 400){
-                Client.callbackError(server, jsonResponse.getBody().getObject().getString("message"));
+                Client.callbackError(server, jsonResponse.getBody().getObject().getString("message"), opid);
             }
             else if (jsonResponse.getStatus() == 201) {
-                Client.callbackWriteback(server, "ACK");
+                Client.callbackWriteback(server, "ACK", opid);
             }
             else {
-                Client.callbackError(server, "Unexpected status code: " + jsonResponse.getStatus());
+                Client.callbackError(server, "Unexpected status code: " + jsonResponse.getStatus(), opid);
             }
         } catch (UnirestException e) {
-            Client.callbackError(server, e.getMessage());
+            Client.callbackError(server, e.getMessage(), opid);
             return;
         }
     }

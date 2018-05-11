@@ -1,6 +1,5 @@
-package domain;
+package server.domain;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.j256.ormlite.field.DataType;
 import com.j256.ormlite.field.DatabaseField;
 import com.j256.ormlite.table.DatabaseTable;
@@ -10,7 +9,6 @@ import java.io.Serializable;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
-import java.util.Date;
 
 @SuppressWarnings("serial")
 @DatabaseTable(tableName = "transactions")

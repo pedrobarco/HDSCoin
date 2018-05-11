@@ -28,12 +28,14 @@ public class Audit implements Runnable {
     private String publicKeyHash;
     private String timestamp;
     private PublicKey publicKey;
+    private int opid;
 
-    public Audit(Server server, String publicKeyHash, String timestamp, PublicKey publicKey){
+    public Audit(Server server, String publicKeyHash, String timestamp, PublicKey publicKey, int opid){
         this.server = server;
         this.publicKeyHash = publicKeyHash;
         this.timestamp = timestamp;
         this.publicKey = publicKey;
+        this.opid = opid;
     }
 
     @Override
@@ -51,10 +53,10 @@ public class Audit implements Runnable {
             }
 
             if (!checkServerSignature(jsonResponse.getBody(), timestamp, server.getPublicKey())) {
-                Client.callbackError(server, "Could not verify the server's signature");
+                Client.callbackError(server, "Could not verify the server's signature", opid);
                 return;
             } else if (jsonResponse.getStatus() == 400) {
-                Client.callbackError(server, jsonResponse.getBody().getObject().getString("message"));
+                Client.callbackError(server, jsonResponse.getBody().getObject().getString("message"), opid);
                 return;
             } else if (jsonResponse.getStatus() == 200) {
                 JSONArray array = jsonResponse.getBody().getObject().getJSONArray("transactions");
@@ -78,7 +80,7 @@ public class Audit implements Runnable {
                             s.update(Base64.getDecoder().decode(transaction.getString("senderSig")));
                             s.update(transaction.getString("timestamp").getBytes());
                             if (s.verify(Base64.getDecoder().decode(transaction.getString("sig")))) {
-                                Client.callbackError(server, "Failed to verify transaction " + transaction.getString("id"));
+                                Client.callbackError(server, "Failed to verify transaction " + transaction.getString("id"), opid);
                                 return;
                             }
                         } catch (InvalidKeyException | SignatureException e) {
@@ -94,7 +96,7 @@ public class Audit implements Runnable {
                             s.update(transaction.getString("previousTransaction").getBytes());
                             s.update(transaction.getString("timestamp").getBytes());
                             if (!s.verify(Base64.getDecoder().decode(transaction.getString("sig")))) {
-                                Client.callbackError(server, "Failed to verify transaction " + transaction.getString("id"));
+                                Client.callbackError(server, "Failed to verify transaction " + transaction.getString("id"), opid);
                                 return;
                             }
                         } catch (InvalidKeyException | SignatureException e) {
@@ -103,14 +105,14 @@ public class Audit implements Runnable {
                     }
                     transactionList.addFirst(t);
                 }
-                Client.callbackAudit(server, transactionList, jsonResponse.getBody());
+                Client.callbackAudit(server, transactionList, jsonResponse.getBody(), opid);
                 return;
             } else {
-                Client.callbackError(server, "Unexpected status code: " + jsonResponse.getStatus());
+                Client.callbackError(server, "Unexpected status code: " + jsonResponse.getStatus(), opid);
                 return;
             }
         } catch (UnirestException e) {
-            Client.callbackError(server, e.getMessage());
+            Client.callbackError(server, e.getMessage(), opid);
             return;
         }
     }

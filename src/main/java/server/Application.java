@@ -1,10 +1,12 @@
+package server;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import domain.Account;
-import domain.AccountState;
-import domain.Transaction;
+import server.domain.Account;
+import server.domain.AccountState;
+import server.domain.Transaction;
 import io.javalin.Javalin;
 
 import java.io.File;
@@ -20,11 +22,13 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.*;
 
+@SuppressWarnings("Duplicates")
 public class Application {
     private static PrivateKey serverPrivkey;
     private static PublicKey serverPubkey;
     private static String address;
     public static int port;
+    private static int delay;
 
     public static ObjectNode signMessage(Object message, String timestamp) throws Exception{
         Signature s = HDSCrypto.createSignature(serverPrivkey);
@@ -40,6 +44,11 @@ public class Application {
         if (args.length < 1) {
             System.out.println("Please specify the port");
             return;
+        }
+        if (args.length == 2) {
+            delay = Integer.parseInt(args[1]);
+        } else {
+            delay = 0;
         }
         port = Integer.valueOf(args[0]);
         generateKey();
@@ -65,6 +74,9 @@ public class Application {
 
         // Register
         app.post("/hds/", ctx -> {
+            if (delay != 0) {
+                Thread.sleep(delay*1000);
+            }
             String key = ctx.formParam("key");
             byte[] sig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("sig")));
             Account account = HDSLib.getInstance().register(HDSCrypto.stringToPublicKey(key), ctx.formParam("timestamp"), sig);
@@ -78,21 +90,11 @@ public class Application {
             }
         });
 
-        // Get Account
-        /*app.get("/hds/:key", ctx -> {
-            String key = ctx.param("key");
-            Account account = HDSLib.getInstance().getAccount(key);
-            if (account == null) {
-                ctx.status(404);
-                ctx.result("Account not found.");
-            } else {
-                ctx.status(200);
-                ctx.json(account);
-            }
-        });*/
-
         // Check Account
         app.post("/hds/:key/check", ctx -> {
+            if (delay != 0) {
+                Thread.sleep(delay*1000);
+            }
             String key = urlDecode(ctx.param("key"));
             AccountState accountState = HDSLib.getInstance().checkAccount(key);
             if (accountState == null) {
@@ -106,6 +108,9 @@ public class Application {
 
         // Audit
         app.post("/hds/:key/audit", ctx -> {
+            if (delay != 0) {
+                Thread.sleep(delay*1000);
+            }
             String key = urlDecode(ctx.param("key"));
             List<Transaction> transactions = HDSLib.getInstance().audit(key);
             if (transactions == null) {
@@ -122,6 +127,9 @@ public class Application {
 
         // Send Transaction
         app.post("/hds/:key/send", ctx -> {
+            if (delay != 0) {
+                Thread.sleep(delay*1000);
+            }
             String sourceKey = urlDecode(ctx.param("key"));
             String destKey = ctx.formParam("destKey");
             int amount = Integer.parseInt(Objects.requireNonNull(ctx.formParam("amount")));
@@ -139,6 +147,9 @@ public class Application {
 
         // Receive Transaction
         app.post("/hds/receive/:id", ctx -> {
+            if (delay != 0) {
+                Thread.sleep(delay*1000);
+            }
             String id = ctx.param("id");
             byte[] transactionSig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("transactionSig")));
             byte[] sig = Base64.getDecoder().decode(Objects.requireNonNull(ctx.formParam("sig")));
@@ -155,6 +166,9 @@ public class Application {
 
         // Ping
         app.post("/hds/ping", ctx -> {
+            if (delay != 0) {
+                Thread.sleep(delay*1000);
+            }
             ctx.status(200);
             ObjectMapper mapper = new ObjectMapper();
             ObjectNode ping = mapper.createObjectNode().put("ping", "ping");
@@ -163,6 +177,9 @@ public class Application {
 
         // Receive a writeback
         app.post("/hds/wb", ctx -> {
+            if (delay != 0) {
+                Thread.sleep(delay*1000);
+            }
             String key = ctx.formParam("key");
             if (ctx.formParam("transactionList") != null) {
                 ObjectMapper mapper = new ObjectMapper();
@@ -188,7 +205,7 @@ public class Application {
         }
     }
 
-    private static void generateKey() {
+    public static void generateKey() {
         if (new File("keys/server.priv").isFile()) {
             // Open keys from file
             try {
@@ -224,7 +241,7 @@ public class Application {
     }
 
     /* This is so clients can know what servers to talk to, and their respective public keys */
-    private static void announceSelf() {
+    public static void announceSelf() {
         String serverName = "s"+port;
         String ip = "http://" + address + ":" + port;
         File announcementFile = new File("servers/"+serverName);
@@ -244,7 +261,7 @@ public class Application {
         announcementFile.deleteOnExit();
     }
 
-    private static String urlDecode(String encoded) {
+    public static String urlDecode(String encoded) {
         return encoded.replace(".","+").replace("_","/").replace("-","=");
     }
 }

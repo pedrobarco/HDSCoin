@@ -24,11 +24,13 @@ public class Check implements Runnable {
     private Server server;
     private String publicKeyHash;
     private String timestamp;
+    private int opid;
 
-    public Check(Server server, String publicKeyHash, String timestamp){
+    public Check(Server server, String publicKeyHash, String timestamp, int opid){
         this.server = server;
         this.publicKeyHash = publicKeyHash;
         this.timestamp = timestamp;
+        this.opid = opid;
     }
 
     @Override
@@ -46,11 +48,11 @@ public class Check implements Runnable {
             }
 
             if (!checkServerSignature(jsonResponse.getBody(), timestamp, server.getPublicKey())) {
-                Client.callbackError(server, "Could not verify the server's signature");
+                Client.callbackError(server, "Could not verify the server's signature", opid);
             }
 
             else if (jsonResponse.getStatus() == 400){
-                Client.callbackError(server, jsonResponse.getBody().getObject().getString("message"));
+                Client.callbackError(server, jsonResponse.getBody().getObject().getString("message"), opid);
             }
             else if (jsonResponse.getStatus() == 200) {
                 System.out.println("Balance: " + jsonResponse.getBody().getObject().get("amount"));
@@ -67,13 +69,13 @@ public class Check implements Runnable {
                             transaction.getString("transactionHash"));
                     pendingTransactions.put(transaction.getString("id"), t);
                 }
-                Client.callbackCheck(server,new Account(jsonResponse.getBody().getObject().getInt("amount"), pendingTransactions));
+                Client.callbackCheck(server,new Account(jsonResponse.getBody().getObject().getInt("amount"), pendingTransactions), opid);
             }
             else {
-                Client.callbackError(server,"Unexpected status code: " + jsonResponse.getStatus());
+                Client.callbackError(server,"Unexpected status code: " + jsonResponse.getStatus(), opid);
             }
         } catch (UnirestException e) {
-            Client.callbackError(server, e.getMessage());
+            Client.callbackError(server, e.getMessage(), opid);
             return;
         }
     }

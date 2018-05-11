@@ -1,4 +1,4 @@
-package exceptions;
+package server.exceptions;
 
 public class WritebackMismatchedTransactionException extends Exception {
     public WritebackMismatchedTransactionException(String tid1, String tid2) {

@@ -23,12 +23,14 @@ public class Register implements Runnable {
     private PublicKey publicKey;
     private String timestamp;
     private String sig;
+    private int opid;
 
-    public Register(Server server, PublicKey publicKey, String timestamp, String sig){
+    public Register(Server server, PublicKey publicKey, String timestamp, String sig, int opid){
         this.publicKey = publicKey;
         this.server = server;
         this.timestamp = timestamp;
         this.sig = sig;
+        this.opid = opid;
     }
 
     @Override
@@ -49,20 +51,20 @@ public class Register implements Runnable {
             }
 
             if (!checkServerSignature(jsonResponse.getBody(), timestamp, server.getPublicKey())) {
-                Client.callbackError(server, "Could not verify the server's signature");
+                Client.callbackError(server, "Could not verify the server's signature", opid);
             }
 
             else if (jsonResponse.getStatus() == 400){
-                Client.callbackError(server, jsonResponse.getBody().getObject().getString("message"));
+                Client.callbackError(server, jsonResponse.getBody().getObject().getString("message"), opid);
             }
             else if (jsonResponse.getStatus() == 201) {
-                Client.callbackRegister(server,"Registered successfully! Your hash: " + jsonResponse.getBody().getObject().get("keyHash"));
+                Client.callbackRegister(server,"Registered successfully! Your hash: " + jsonResponse.getBody().getObject().get("keyHash"), opid);
             }
             else {
-                Client.callbackError(server, "Unexpected status code: " + jsonResponse.getStatus());
+                Client.callbackError(server, "Unexpected status code: " + jsonResponse.getStatus(), opid);
             }
         } catch (UnirestException e) {
-            Client.callbackError(server, e.getMessage());
+            Client.callbackError(server, e.getMessage(), opid);
             return;
         }
     }

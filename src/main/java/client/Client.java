@@ -28,8 +28,10 @@ public class Client {
 
     private static String publicKeyHash = null;
 
-    public static List<Server> servers;
+    private static List<Server> servers;
+    private static int majority;
 
+    private static int opid;
     private static int responses;
     private static Map<String, Integer> errors;
     private static List<Object> validResponses;
@@ -88,7 +90,7 @@ public class Client {
         }
 
         fetchServers();
-
+        opid = 0;
         choice = "";
         while (!choice.equals("0")) {
             System.out.println("Available operations:");
@@ -279,11 +281,16 @@ public class Client {
                 }
             }
         }
-        // TODO: Ping?
         System.out.println("Connected to " + servers.size() + " servers");
+        int f = (servers.size()-1)/3;
+        majority = 2*f+1;
+        if (debug == debugMode.NORMAL) {
+            System.out.println("[DEBUG] Majority is " + majority);
+        }
     }
 
-    public static void register(){
+    public static void register() {
+        opid += 1;
         responses = 0;
         errors = new HashMap<>();
         validResponses = new LinkedList<>();
@@ -298,56 +305,60 @@ public class Client {
             System.out.println("---------------");
         }
 
-        for (Server server:servers){
-            Thread t = new Thread(new Register(server, publicKey, timestamp, signature));
+        for (Server server : servers) {
+            Thread t = new Thread(new Register(server, publicKey, timestamp, signature, opid));
             t.start();
         }
 
-        synchronized(syncObject) {
+        synchronized (syncObject) {
             try {
                 syncObject.wait();
             } catch (InterruptedException e) {
                 System.out.println("[DEBUG] Thread interrupted");
             }
         }
-        if (debug == debugMode.NORMAL) {
-            System.out.println("[DEBUG] Received majority responses");
-
-            if (validResponses.isEmpty()) {
-                for (String error:errors.keySet()){
-                    System.out.println("[DEBUG] " + errors.get(error) + " servers returned error:\n[DEBUG] " + error);
-                }
-            }
-        }
 
         String response = "[ERROR] Couldn't get any response. This shouldn't happen.";
-        long max = 0;
-        Map<String, Long> counts =
-                validResponses.stream().collect(Collectors.groupingBy(e -> (String)e, Collectors.counting()));
-        for (String r:counts.keySet()){
-            if (counts.get(r) > max){
-                max = counts.get(r);
-                response = r;
+        synchronized (Client.class) {
+            if (debug == debugMode.NORMAL) {
+                System.out.println("[DEBUG] Received majority responses");
+                if (validResponses.isEmpty()) {
+                    for (String error : errors.keySet()) {
+                        System.out.println("[DEBUG] " + errors.get(error) + " servers returned error:\n[DEBUG] " + error);
+                    }
+                }
             }
-        }
-        for (String e:errors.keySet()){
-            if (errors.get(e) >= max){
-                max = errors.get(e);
-                response = "[ERROR] " + e;
+
+            long max = 0;
+            Map<String, Long> counts =
+                    validResponses.stream().collect(Collectors.groupingBy(e -> (String) e, Collectors.counting()));
+            for (String r : counts.keySet()) {
+                if (counts.get(r) > max) {
+                    max = counts.get(r);
+                    response = r;
+                }
+            }
+            for (String e : errors.keySet()) {
+                if (errors.get(e) >= max) {
+                    max = errors.get(e);
+                    response = "[ERROR] " + e;
+                }
             }
         }
 
         System.out.println(response);
     }
 
-    public static synchronized void callbackRegister(Server server, String response){
+    public static synchronized void callbackRegister(Server server, String response, int copid){
+        if (copid != opid) {
+            return;
+        }
         responses = responses+1;
         validResponses.add(response);
         if (debug == debugMode.VERBOSE) {
             System.out.println("[DEBUG] Received " + responses + " responses so far");
         }
-        // TODO: determine how many are needed for majority
-        if (responses >= 2){
+        if (responses >= majority){
             synchronized (syncObject) {
                 syncObject.notify();
             }
@@ -355,6 +366,7 @@ public class Client {
     }
 
     public static void send(String dest, String amount){
+        opid += 1;
         responses = 0;
         errors = new HashMap<>();
         validResponses = new LinkedList<>();
@@ -377,7 +389,7 @@ public class Client {
         }
 
         for (Server server:servers){
-            Thread t = new Thread(new Send(server, publicKeyHash, dest, amount, previousTransaction, timestamp, signature));
+            Thread t = new Thread(new Send(server, publicKeyHash, dest, amount, previousTransaction, timestamp, signature, opid));
             t.start();
         }
 
@@ -388,44 +400,47 @@ public class Client {
                 System.out.println("[DEBUG] Thread interrupted");
             }
         }
-        if (debug == debugMode.NORMAL) {
-            System.out.println("[DEBUG] Received majority responses");
+        String response = "[ERROR] Couldn't get any response. This shouldn't happen.";
+        synchronized (Client.class) {
+            if (debug == debugMode.NORMAL) {
+                System.out.println("[DEBUG] Received majority responses");
 
-            if (validResponses.isEmpty()) {
-                for (String error:errors.keySet()){
-                    System.out.println("[DEBUG] " + errors.get(error) + " servers returned error:\n[DEBUG] " + error);
+                if (validResponses.isEmpty()) {
+                    for (String error : errors.keySet()) {
+                        System.out.println("[DEBUG] " + errors.get(error) + " servers returned error:\n[DEBUG] " + error);
+                    }
+                }
+            }
+
+            long max = 0;
+            Map<String, Long> counts =
+                    validResponses.stream().collect(Collectors.groupingBy(e -> (String) e, Collectors.counting()));
+            for (String r : counts.keySet()) {
+                if (counts.get(r) > max) {
+                    max = counts.get(r);
+                    response = r;
+                }
+            }
+            for (String e : errors.keySet()) {
+                if (errors.get(e) >= max) {
+                    max = errors.get(e);
+                    response = "[ERROR] " + e;
                 }
             }
         }
-
-        String response = "[ERROR] Couldn't get any response. This shouldn't happen.";
-        long max = 0;
-        Map<String, Long> counts =
-                validResponses.stream().collect(Collectors.groupingBy(e -> (String)e, Collectors.counting()));
-        for (String r:counts.keySet()){
-            if (counts.get(r) > max){
-                max = counts.get(r);
-                response = r;
-            }
-        }
-        for (String e:errors.keySet()){
-            if (errors.get(e) >= max){
-                max = errors.get(e);
-                response = "[ERROR] " + e;
-            }
-        }
-
         System.out.println(response);
     }
 
-    public static synchronized void callbackSend(Server server, String response){
+    public static synchronized void callbackSend(Server server, String response, int copid){
+        if (copid != opid) {
+            return;
+        }
         responses = responses+1;
         validResponses.add(response);
         if (debug == debugMode.VERBOSE) {
             System.out.println("[DEBUG] Received " + responses + " responses so far");
         }
-        // TODO: determine how many are needed for majority
-        if (responses >= 2){
+        if (responses >= majority){
             synchronized (syncObject) {
                 syncObject.notify();
             }
@@ -433,6 +448,7 @@ public class Client {
     }
 
     public static void receive(String transactionID){
+        opid += 1;
         responses = 0;
         errors = new HashMap<>();
         validResponses = new LinkedList<>();
@@ -458,7 +474,7 @@ public class Client {
         }
 
         for (Server server:servers){
-            Thread t = new Thread(new Receive(server, transactionID, transactionSig, previousTransaction, timestamp, signature));
+            Thread t = new Thread(new Receive(server, transactionID, transactionSig, previousTransaction, timestamp, signature, opid));
             t.start();
         }
 
@@ -469,44 +485,48 @@ public class Client {
                 System.out.println("[DEBUG] Thread interrupted");
             }
         }
-        if (debug == debugMode.NORMAL) {
-            System.out.println("[DEBUG] Received majority responses");
+        String response = "[ERROR] Couldn't get any response. This shouldn't happen.";
+        synchronized (Client.class) {
+            if (debug == debugMode.NORMAL) {
+                System.out.println("[DEBUG] Received majority responses");
 
-            if (validResponses.isEmpty()) {
-                for (String error:errors.keySet()){
-                    System.out.println("[DEBUG] " + errors.get(error) + " servers returned error:\n[DEBUG] " + error);
+                if (validResponses.isEmpty()) {
+                    for (String error : errors.keySet()) {
+                        System.out.println("[DEBUG] " + errors.get(error) + " servers returned error:\n[DEBUG] " + error);
+                    }
                 }
             }
-        }
 
-        String response = "[ERROR] Couldn't get any response. This shouldn't happen.";
-        long max = 0;
-        Map<String, Long> counts =
-                validResponses.stream().collect(Collectors.groupingBy(e -> (String)e, Collectors.counting()));
-        for (String r:counts.keySet()){
-            if (counts.get(r) > max){
-                max = counts.get(r);
-                response = r;
+            long max = 0;
+            Map<String, Long> counts =
+                    validResponses.stream().collect(Collectors.groupingBy(e -> (String) e, Collectors.counting()));
+            for (String r : counts.keySet()) {
+                if (counts.get(r) > max) {
+                    max = counts.get(r);
+                    response = r;
+                }
             }
-        }
-        for (String e:errors.keySet()){
-            if (errors.get(e) >= max){
-                max = errors.get(e);
-                response = "[ERROR] " + e;
+            for (String e : errors.keySet()) {
+                if (errors.get(e) >= max) {
+                    max = errors.get(e);
+                    response = "[ERROR] " + e;
+                }
             }
         }
 
         System.out.println(response);
     }
 
-    public static synchronized void callbackReceive(Server server, String response){
+    public static synchronized void callbackReceive(Server server, String response, int copid){
+        if (copid != opid) {
+            return;
+        }
         responses = responses+1;
         validResponses.add(response);
         if (debug == debugMode.VERBOSE) {
             System.out.println("[DEBUG] Received " + responses + " responses so far");
         }
-        // TODO: determine how many are needed for majority
-        if (responses >= 2){
+        if (responses >= majority){
             synchronized (syncObject) {
                 syncObject.notify();
             }
@@ -514,6 +534,7 @@ public class Client {
     }
 
     public static boolean check(){
+        opid += 1;
         responses = 0;
         errors = new HashMap<>();
         validResponses = new LinkedList<>();
@@ -526,7 +547,7 @@ public class Client {
         }
 
         for (Server server:servers){
-            Thread t = new Thread(new Check(server, publicKeyHash,timestamp));
+            Thread t = new Thread(new Check(server, publicKeyHash,timestamp, opid));
             t.start();
         }
 
@@ -540,20 +561,23 @@ public class Client {
         if (debug == debugMode.NORMAL) {
             System.out.println("[DEBUG] Received majority responses");
         }
-        if (validResponses.isEmpty()) {
-            for (String error:errors.keySet()){
-                System.out.println(errors.get(error) + " servers returned error:\n" + error);
-            }
-            return false;
-        }
 
-        long max = 0;
-        Map<Account, Long> counts =
-                validResponses.stream().collect(Collectors.groupingBy(e -> (Account)e, Collectors.counting()));
-        for (Account a:counts.keySet()){
-            if (counts.get(a) > max){
-                max = counts.get(a);
-                account = a;
+        synchronized (Client.class) {
+            if (validResponses.isEmpty()) {
+                for (String error : errors.keySet()) {
+                    System.out.println(errors.get(error) + " servers returned error:\n" + error);
+                }
+                return false;
+            }
+
+            long max = 0;
+            Map<Account, Long> counts =
+                    validResponses.stream().collect(Collectors.groupingBy(e -> (Account) e, Collectors.counting()));
+            for (Account a : counts.keySet()) {
+                if (counts.get(a) > max) {
+                    max = counts.get(a);
+                    account = a;
+                }
             }
         }
 
@@ -570,14 +594,16 @@ public class Client {
         return true;
     }
 
-    public static synchronized void callbackCheck(Server server, Account response){
+    public static synchronized void callbackCheck(Server server, Account response, int copid){
+        if (copid != opid) {
+            return;
+        }
         responses = responses+1;
         validResponses.add(response);
         if (debug == debugMode.VERBOSE) {
             System.out.println("[DEBUG] Received " + responses + " responses so far");
         }
-        // TODO: determine how many are needed for majority
-        if (responses >= 2){
+        if (responses >= majority){
             synchronized (syncObject) {
                 syncObject.notify();
             }
@@ -585,6 +611,7 @@ public class Client {
     }
 
     public static boolean audit(boolean print){
+        opid += 1;
         responses = 0;
         errors = new HashMap<>();
         validResponses = new LinkedList<>();
@@ -598,7 +625,7 @@ public class Client {
         }
 
         for (Server server:servers){
-            Thread t = new Thread(new Audit(server, publicKeyHash,timestamp, publicKey));
+            Thread t = new Thread(new Audit(server, publicKeyHash,timestamp, publicKey, opid));
             t.start();
         }
 
@@ -612,22 +639,24 @@ public class Client {
         if (debug == debugMode.NORMAL) {
             System.out.println("[DEBUG] Received majority responses");
         }
-        if (validResponses.isEmpty()) {
-            for (String error:errors.keySet()){
-                System.out.println(errors.get(error) + " servers returned error:\n" + error);
-            }
-            return false;
-        }
-        int maxOps = 0;
         List<Transaction> chosenList = null;
         JsonNode writebackValue = null;
-        for (Object response:validResponses){
-            int index = validResponses.indexOf(response);
-            List<Transaction> l = (List<Transaction>) response;
-            if (l.size() > maxOps) {
-                maxOps = l.size();
-                chosenList = l;
-                writebackValue = jsonResponses.get(index);
+        synchronized (Client.class) {
+            if (validResponses.isEmpty()) {
+                for (String error : errors.keySet()) {
+                    System.out.println(errors.get(error) + " servers returned error:\n" + error);
+                }
+                return false;
+            }
+            int maxOps = 0;
+            for (Object response : validResponses) {
+                int index = validResponses.indexOf(response);
+                List<Transaction> l = (List<Transaction>) response;
+                if (l.size() > maxOps) {
+                    maxOps = l.size();
+                    chosenList = l;
+                    writebackValue = jsonResponses.get(index);
+                }
             }
         }
 
@@ -636,11 +665,12 @@ public class Client {
         }
         // -------------- Writeback --------------------
         timestamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
+        opid += 1;
         responses = 0;
         errors = new HashMap<>();
         validResponses = new LinkedList<>();
         for (Server server:servers){
-            Thread t = new Thread(new Writeback(server, publicKeyHash, writebackValue, timestamp));
+            Thread t = new Thread(new Writeback(server, publicKeyHash, writebackValue, timestamp, opid));
             t.start();
         }
 
@@ -671,7 +701,10 @@ public class Client {
         return true;
     }
 
-    public static synchronized void callbackAudit(Server server, List<Transaction> response, JsonNode json){
+    public static synchronized void callbackAudit(Server server, List<Transaction> response, JsonNode json, int copid){
+        if (copid != opid) {
+            return;
+        }
         responses = responses+1;
         validResponses.add(response);
         jsonResponses.add(json);
@@ -679,28 +712,32 @@ public class Client {
             System.out.println("[DEBUG] Added transaction list of size " + response.size());
             System.out.println("[DEBUG] Received " + responses + " responses so far");
         }
-        // TODO: determine how many are needed for majority
-        if (responses >= 2){
+        if (responses >= majority){
             synchronized (syncObject) {
                 syncObject.notify();
             }
         }
     }
 
-    public static synchronized void callbackWriteback(Server server, String response){
+    public static synchronized void callbackWriteback(Server server, String response, int copid){
+        if (copid != opid) {
+            return;
+        }
         responses = responses+1;
         if (debug == debugMode.VERBOSE) {
             System.out.println("[DEBUG] Received " + responses + " responses for writeback so far");
         }
-        // TODO: determine how many are needed for majority
-        if (responses >= 2){
+        if (responses >= majority){
             synchronized (syncObject) {
                 syncObject.notify();
             }
         }
     }
 
-    public static synchronized void callbackError(Server server, String response){
+    public static synchronized void callbackError(Server server, String response, int copid){
+        if (copid != opid) {
+            return;
+        }
         responses = responses+1;
         if (errors.containsKey(response)){
             errors.put(response, errors.get(response)+1);
@@ -712,8 +749,7 @@ public class Client {
             System.out.println("[DEBUG] Got error: " + response);
             System.out.println("[DEBUG] Received " + responses + " responses so far");
         }
-        // TODO: determine how many are needed for majority
-        if (responses >= 2){
+        if (responses >= majority){
             synchronized (syncObject) {
                 syncObject.notify();
             }

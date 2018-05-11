@@ -1,4 +1,4 @@
-package exceptions;
+package server.exceptions;
 
 public class WrongPreviousTransactionException extends Exception {
     public WrongPreviousTransactionException(String given, String expected){

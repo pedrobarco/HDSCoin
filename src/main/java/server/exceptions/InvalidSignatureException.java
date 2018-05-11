@@ -1,4 +1,4 @@
-package exceptions;
+package server.exceptions;
 
 @SuppressWarnings("serial")
 public class InvalidSignatureException extends Exception{

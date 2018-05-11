@@ -1,4 +1,5 @@
-import com.fasterxml.jackson.core.JsonProcessingException;
+package server;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.j256.ormlite.dao.Dao;
@@ -6,10 +7,10 @@ import com.j256.ormlite.dao.DaoManager;
 import com.j256.ormlite.jdbc.JdbcConnectionSource;
 import com.j256.ormlite.support.ConnectionSource;
 import com.j256.ormlite.table.TableUtils;
-import domain.Account;
-import domain.AccountState;
-import domain.Transaction;
-import exceptions.*;
+import server.domain.Account;
+import server.domain.AccountState;
+import server.domain.Transaction;
+import server.exceptions.*;
 
 import java.math.BigInteger;
 import java.security.*;

@@ -1,4 +1,4 @@
-package domain;
+package server.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.j256.ormlite.dao.ForeignCollection;
