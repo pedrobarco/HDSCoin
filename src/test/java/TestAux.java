@@ -57,19 +57,20 @@ public class TestAux {
 		return sendAmountHelper(srckey, destkey, amount, previousTransaction, privkey, HDSCrypto.dateToString(new Date()), hdsLib);
 	}
 
-	public static void receiveAmountHelper(String  id, PrivateKey privkey, String previousTransaction, String timestamp, byte[] sig, HDSLib hdsLib) throws Exception{
-		hdsLib.receiveAmount(id, null, previousTransaction, timestamp, sig);
+	public static void receiveAmountHelper(String  id, byte[]senderSig, PrivateKey privkey, String previousTransaction, String timestamp, byte[] sig, HDSLib hdsLib) throws Exception{
+		hdsLib.receiveAmount(id, senderSig, previousTransaction, timestamp, sig);
 	}
 
-	public static void receiveAmountHelper(String id, PrivateKey privkey, String previousTransaction, String timestamp, HDSLib hdsLib) throws Exception{
+	public static void receiveAmountHelper(String id, byte[]senderSig, PrivateKey privkey, String previousTransaction, String timestamp, HDSLib hdsLib) throws Exception{
 		Signature s = HDSCrypto.createSignature(privkey);
 		s.update(id.getBytes());
+		s.update(senderSig);
 		s.update(previousTransaction.getBytes());
 		s.update(timestamp.getBytes());
-		receiveAmountHelper(id, privkey, previousTransaction, timestamp, s.sign(), hdsLib);
+		receiveAmountHelper(id, senderSig,privkey, previousTransaction, timestamp, s.sign(), hdsLib);
 	}
 
-	public static void receiveAmountHelper(String id, PrivateKey privkey, String previousTransaction, HDSLib hdsLib) throws Exception{
-		receiveAmountHelper(id, privkey, previousTransaction, HDSCrypto.dateToString(new Date()), hdsLib);
+	public static void receiveAmountHelper(String id, byte[]senderSig, PrivateKey privkey, String previousTransaction, HDSLib hdsLib) throws Exception{
+		receiveAmountHelper(id, senderSig, privkey, previousTransaction, HDSCrypto.dateToString(new Date()), hdsLib);
 	}
 }

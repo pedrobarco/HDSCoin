@@ -81,21 +81,12 @@ public class SendAmountTest {
 		assertEquals(30, sender.getAmount());
 		assertEquals(100, receiver.getAmount());
 		assertEquals(1, hdsLib.getAccountTransactions(sender.getKeyHash()).size());
-		assertEquals(1, hdsLib.getAccountTransactions(receiver.getKeyHash()).size());
 
 		Transaction transaction = hdsLib.getAccountTransactions(sender.getKeyHash()).get(0);
 		assertEquals(70, transaction.getAmount());
 		assertEquals(pubHash1, transaction.getFrom().getKeyHash());
 		assertEquals(pubHash2, transaction.getTo().getKeyHash());
 		assertTrue(transaction.isPending());
-
-		Signature s = HDSCrypto.verifySignature(pubKey1);
-		s.update(transaction.getFrom().getKeyHash().getBytes());
-		s.update(transaction.getTo().getKeyHash().getBytes());
-		s.update(BigInteger.valueOf(transaction.getAmount()).toByteArray());
-		s.update(t1.getTransactionHash().getBytes());
-		s.update(transaction.getTimestamp().getBytes());
-		assertTrue(s.verify(transaction.getSenderSig()));
 
 		Transaction newTransaction = TestAux.sendAmountHelper(pubKey2, pubKey3, 100, t1.getTransactionHash(), privKey2, hdsLib);
 		assertNotNull(newTransaction);
@@ -140,7 +131,7 @@ public class SendAmountTest {
 		TestAux.sendAmountHelper(pubKey1, pubKey2, 0, "000000",privKey1, hdsLib);
 	}
 
-	@Test(expected = RepeatedTransactionException.class)
+	@Test(expected = InvalidSignatureException.class)
 	public void sendAmountReplayAttack() throws Exception{
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib);
 		TestAux.registerHelper(pubKey2, privKey2, hdsLib);

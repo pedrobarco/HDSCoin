@@ -38,6 +38,18 @@
                             </arguments>
                         </configuration>
                     </execution>
+                    <execution>
+                        <id>mapp</id>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>server.MaliciousApplication</mainClass>
+                            <arguments>
+                                <argument>666</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
             <plugin>

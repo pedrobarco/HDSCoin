@@ -83,7 +83,7 @@ public class CheckAccountTest {
 		assertEquals(70, sender.getAmount());
 		assertEquals(0, sender.getPendingTransactions().size());
 
-		TestAux.receiveAmountHelper(t.getId(), privKey1, t.getTransactionHash(),hdsLib);
+		TestAux.receiveAmountHelper(t.getId(),t.getSig(), privKey1, t.getTransactionHash(),hdsLib);
 		receiver = hdsLib.checkAccount(a1.getKeyHash());
 		assertNotNull(receiver);
 		assertEquals(a1.getKeyHash(), receiver.getKeyHash());

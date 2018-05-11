@@ -69,14 +69,9 @@ public class ReceiveAmountTest {
 		String a2Hash = TestAux.registerHelper(pubKey2, privKey2, hdsLib).getKeyHash();
 
 		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, "000000", privKey1, hdsLib);
-		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey2, sentTransaction.getTransactionHash(), hdsLib);
+		TestAux.receiveAmountHelper(sentTransaction.getId(),sentTransaction.getSig(), privKey2, sentTransaction.getTransactionHash(), hdsLib);
 		Transaction doneTransaction = hdsLib.getTransaction(sentTransaction.getId());
-		assertNotNull(doneTransaction.getSenderSig());
 		assertNotNull(doneTransaction.getSig());
-		Signature s = HDSCrypto.verifySignature(pubKey2);
-		s.update(doneTransaction.getId().getBytes());
-		s.update(doneTransaction.getTimestamp().getBytes());
-		assertTrue(s.verify(doneTransaction.getSig()));
 
 		Account a2 = hdsLib.getAccount(a2Hash);
 		assertEquals(150, a2.getAmount());
@@ -86,7 +81,7 @@ public class ReceiveAmountTest {
 
 	@Test(expected = TransactionNotFoundException.class)
 	public void receiveAmountIdNotFound() throws Exception{
-		TestAux.receiveAmountHelper("69-asd", privKey1, "000000", hdsLib);
+		TestAux.receiveAmountHelper("69-asd", "asd".getBytes(),privKey1, "000000", hdsLib);
 	}
 
 	@Test(expected = TransactionAlreadyReceivedException.class)
@@ -95,8 +90,8 @@ public class ReceiveAmountTest {
 		TestAux.registerHelper(pubKey2, privKey2, hdsLib).getKeyHash();
 		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, "000000", privKey1, hdsLib);
 
-		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey2, sentTransaction.getTransactionHash(),hdsLib);
-		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey2, sentTransaction.getTransactionHash(), hdsLib);
+		TestAux.receiveAmountHelper(sentTransaction.getId(), sentTransaction.getSig(), privKey2, sentTransaction.getTransactionHash(),hdsLib);
+		TestAux.receiveAmountHelper(sentTransaction.getId(), sentTransaction.getSig(), privKey2, sentTransaction.getTransactionHash(), hdsLib);
 	}
 
 	@Test(expected = InvalidSignatureException.class)
@@ -105,7 +100,7 @@ public class ReceiveAmountTest {
 		TestAux.registerHelper(pubKey2, privKey2, hdsLib).getKeyHash();
 		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, "000000", privKey1, hdsLib);
 
-		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey1,sentTransaction.getTransactionHash(), hdsLib);
+		TestAux.receiveAmountHelper(sentTransaction.getId(), sentTransaction.getSig(), privKey1,sentTransaction.getTransactionHash(), hdsLib);
 	}
 
 	@Test(expected = TimestampNotFreshException.class)
@@ -118,7 +113,7 @@ public class ReceiveAmountTest {
 		c.setTime(new Date());
 		c.add(Calendar.DATE, 2);
 		Date timestamp = c.getTime();
-		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey1, sentTransaction.getTransactionHash(),HDSCrypto.dateToString(timestamp), hdsLib);
+		TestAux.receiveAmountHelper(sentTransaction.getId(), sentTransaction.getSig(),privKey1, sentTransaction.getTransactionHash(),HDSCrypto.dateToString(timestamp), hdsLib);
 	}
 
 	@Test(expected = InvalidSignatureException.class)
@@ -131,6 +126,6 @@ public class ReceiveAmountTest {
 		Signature s = HDSCrypto.createSignature(privKey1);
 		s.update((sentTransaction.getId()+"a").getBytes());
 		s.update(HDSCrypto.dateToString(timestamp).getBytes());
-		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey1, sentTransaction.getTransactionHash(),HDSCrypto.dateToString(timestamp), s.sign(), hdsLib);
+		TestAux.receiveAmountHelper(sentTransaction.getId(), sentTransaction.getSig(),privKey1, sentTransaction.getTransactionHash(),HDSCrypto.dateToString(timestamp), s.sign(), hdsLib);
 	}
 }

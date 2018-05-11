@@ -78,7 +78,7 @@ public class AuditTest {
 		assertEquals(1, receiverList.size());
 		assertEquals(t, receiverList.get(0));
 
-		TestAux.receiveAmountHelper(t.getId(), privKey2, t.getTransactionHash(),hdsLib);
+		TestAux.receiveAmountHelper(t.getId(),t.getSig(), privKey2, t.getTransactionHash(),hdsLib);
 		t = hdsLib.getTransaction(t.getId());
 		senderList = hdsLib.audit(TestAux.hashKey(pubKey1));
 		receiverList = hdsLib.audit(TestAux.hashKey(pubKey1));

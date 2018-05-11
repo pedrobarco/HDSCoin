@@ -209,6 +209,8 @@ public class Application {
     }
 
     public static void generateKey() {
+        File keydir = new File("keys");
+        keydir.mkdirs();
         if (new File("keys/s"+port+".ks").isFile()) {
             // Open keys from file
             try {
@@ -265,7 +267,6 @@ public class Application {
             e.printStackTrace();
             return;
         }
-        digester.update(serverPubkey.getEncoded());
     }
 
     @SuppressWarnings("Duplicates")
