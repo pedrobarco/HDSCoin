@@ -11,8 +11,6 @@ import com.mashape.unirest.http.exceptions.UnirestException;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -55,8 +53,6 @@ public class Check implements Runnable {
                 Client.callbackError(server, jsonResponse.getBody().getObject().getString("message"), opid);
             }
             else if (jsonResponse.getStatus() == 200) {
-                System.out.println("Balance: " + jsonResponse.getBody().getObject().get("amount"));
-                System.out.println("Pending transactions: ");
                 JSONArray array = jsonResponse.getBody().getObject().getJSONArray("pendingTransactions");
                 Map<String, Transaction> pendingTransactions = new HashMap<>();
                 for(int i = 0; i< array.length(); i++){

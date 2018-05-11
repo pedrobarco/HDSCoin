@@ -1,12 +1,14 @@
-import domain.Account;
-import exceptions.InvalidSignatureException;
-import exceptions.KeyAlreadyRegistered;
-import exceptions.NullArgumentException;
-import exceptions.TimestampNotFreshException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import server.HDSCrypto;
+import server.HDSLib;
+import server.domain.Account;
+import server.exceptions.InvalidSignatureException;
+import server.exceptions.KeyAlreadyRegistered;
+import server.exceptions.NullArgumentException;
+import server.exceptions.TimestampNotFreshException;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -56,8 +58,8 @@ public class RegisterTest {
 	@After
 	public void tearDown() throws Exception {
 		HDSLib.forceReset();
-		Files.deleteIfExists(Paths.get("./db/test.mv.db"));
-		Files.deleteIfExists(Paths.get("./db/test.trace.db"));
+		Files.deleteIfExists(Paths.get("./db/test0.mv.db"));
+		Files.deleteIfExists(Paths.get("./db/test0.trace.db"));
 	}
 
 	@Test
@@ -110,7 +112,7 @@ public class RegisterTest {
 
 		Signature s = HDSCrypto.createSignature(privKey1);
 		s.update(HDSCrypto.dateToString(timestamp).getBytes());
-		TestAux.registerHelper(pubKey1, privKey1, changeTimestamp, s.sign(), hdsLib);
+		TestAux.registerHelper(pubKey1, privKey1, HDSCrypto.dateToString(changeTimestamp), s.sign(), hdsLib);
 	}
 
 	@Test(expected = TimestampNotFreshException.class)
@@ -120,7 +122,7 @@ public class RegisterTest {
 		c.add(Calendar.DATE, 2);
 		Date timestamp = c.getTime();
 
-		TestAux.registerHelper(pubKey1,privKey1,timestamp,hdsLib);
+		TestAux.registerHelper(pubKey1,privKey1,HDSCrypto.dateToString(timestamp),hdsLib);
 	}
 
 	@Test(expected = NullArgumentException.class)
@@ -137,6 +139,6 @@ public class RegisterTest {
 
 	@Test(expected = NullArgumentException.class)
 	public void registerNullSig() throws Exception {
-		TestAux.registerHelper(pubKey1, privKey1, new Date(), null, hdsLib);
+		TestAux.registerHelper(pubKey1, privKey1, HDSCrypto.dateToString(new Date()), null, hdsLib);
 	}
 }

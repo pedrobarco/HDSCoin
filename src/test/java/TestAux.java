@@ -1,5 +1,7 @@
-import domain.Account;
-import domain.Transaction;
+import server.HDSCrypto;
+import server.HDSLib;
+import server.domain.Account;
+import server.domain.Transaction;
 
 import java.math.BigInteger;
 import java.security.*;
@@ -19,54 +21,55 @@ public class TestAux {
 		return Base64.getEncoder().encodeToString(digester.digest());
 	}
 
-	public static Account registerHelper(PublicKey pubkey, PrivateKey privkey, Date timestamp, byte[] sig, HDSLib hdsLib) throws Exception {
+	public static Account registerHelper(PublicKey pubkey, PrivateKey privkey, String timestamp, byte[] sig, HDSLib hdsLib) throws Exception {
 		return hdsLib.register(pubkey, timestamp, sig);
 	}
 
-	public static Account registerHelper(PublicKey pubkey, PrivateKey privkey, Date timestamp, HDSLib hdsLib) throws Exception {
+	public static Account registerHelper(PublicKey pubkey, PrivateKey privkey, String timestamp, HDSLib hdsLib) throws Exception {
 		Signature s = HDSCrypto.createSignature(privkey);
-		s.update(HDSCrypto.dateToString(timestamp).getBytes());
+		s.update(timestamp.getBytes());
 		return registerHelper(pubkey, privkey, timestamp, s.sign(), hdsLib);
 	}
 
 	public static Account registerHelper(PublicKey pubkey, PrivateKey privkey, HDSLib hdsLib) throws Exception {
-		return registerHelper(pubkey, privkey, new Date(), hdsLib);
+		return registerHelper(pubkey, privkey, HDSCrypto.dateToString(new Date()), hdsLib);
 	}
 
-	public static Transaction sendAmountHelper(PublicKey srckey, PublicKey destkey, int amount, PrivateKey privkey, Date timestamp, byte[] sig, HDSLib hdsLib) throws Exception {
+	public static Transaction sendAmountHelper(PublicKey srckey, PublicKey destkey, int amount, PrivateKey privkey, String previousTransaction, String timestamp, byte[] sig, HDSLib hdsLib) throws Exception {
 		String srckeyHash = hashKey(srckey);
 		String destkeyHash = hashKey(destkey);
-		return hdsLib.sendAmount(srckeyHash, destkeyHash, amount, timestamp, sig);
+		return hdsLib.sendAmount(srckeyHash, destkeyHash, amount, previousTransaction, timestamp, sig);
 	}
 
-	public static Transaction sendAmountHelper(PublicKey srckey, PublicKey destkey, int amount, PrivateKey privkey, Date timestamp, HDSLib hdsLib) throws Exception {
+	public static Transaction sendAmountHelper(PublicKey srckey, PublicKey destkey, int amount, String previousTransaction, PrivateKey privkey, String timestamp, HDSLib hdsLib) throws Exception {
 		String srckeyHash = hashKey(srckey);
 		String destkeyHash = hashKey(destkey);
 		Signature s = HDSCrypto.createSignature(privkey);
 		s.update(srckeyHash.getBytes());
 		s.update(destkeyHash.getBytes());
 		s.update(BigInteger.valueOf(amount).toByteArray());
-		s.update(HDSCrypto.dateToString(timestamp).getBytes());
-		return sendAmountHelper(srckey, destkey, amount, privkey, timestamp, s.sign(), hdsLib);
+		s.update(previousTransaction.getBytes());
+		s.update(timestamp.getBytes());
+		return sendAmountHelper(srckey, destkey, amount, privkey, previousTransaction, timestamp, s.sign(), hdsLib);
 	}
 
-	public static Transaction sendAmountHelper(PublicKey srckey, PublicKey destkey, int amount, PrivateKey privkey, HDSLib hdsLib) throws Exception {
-		return sendAmountHelper(srckey, destkey, amount, privkey, new Date(), hdsLib);
+	public static Transaction sendAmountHelper(PublicKey srckey, PublicKey destkey, int amount, String previousTransaction, PrivateKey privkey, HDSLib hdsLib) throws Exception {
+		return sendAmountHelper(srckey, destkey, amount, previousTransaction, privkey, HDSCrypto.dateToString(new Date()), hdsLib);
 	}
 
-	public static void receiveAmountHelper(int id, PrivateKey privkey, Date timestamp, byte[] sig, HDSLib hdsLib) throws Exception{
-		//FIXME: get transaction signature (instead of null)
-		hdsLib.receiveAmount(id, null, timestamp, sig);
+	public static void receiveAmountHelper(String  id, PrivateKey privkey, String previousTransaction, String timestamp, byte[] sig, HDSLib hdsLib) throws Exception{
+		hdsLib.receiveAmount(id, null, previousTransaction, timestamp, sig);
 	}
 
-	public static void receiveAmountHelper(int id, PrivateKey privkey, Date timestamp, HDSLib hdsLib) throws Exception{
+	public static void receiveAmountHelper(String id, PrivateKey privkey, String previousTransaction, String timestamp, HDSLib hdsLib) throws Exception{
 		Signature s = HDSCrypto.createSignature(privkey);
-		s.update(BigInteger.valueOf(id).toByteArray());
-		s.update(HDSCrypto.dateToString(timestamp).getBytes());
-		receiveAmountHelper(id, privkey, timestamp, s.sign(), hdsLib);
+		s.update(id.getBytes());
+		s.update(previousTransaction.getBytes());
+		s.update(timestamp.getBytes());
+		receiveAmountHelper(id, privkey, previousTransaction, timestamp, s.sign(), hdsLib);
 	}
 
-	public static void receiveAmountHelper(int id, PrivateKey privkey, HDSLib hdsLib) throws Exception{
-		receiveAmountHelper(id, privkey, new Date(), hdsLib);
+	public static void receiveAmountHelper(String id, PrivateKey privkey, String previousTransaction, HDSLib hdsLib) throws Exception{
+		receiveAmountHelper(id, privkey, previousTransaction, HDSCrypto.dateToString(new Date()), hdsLib);
 	}
 }

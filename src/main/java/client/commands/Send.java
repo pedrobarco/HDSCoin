@@ -8,10 +8,11 @@ import com.mashape.unirest.http.Unirest;
 import com.mashape.unirest.http.exceptions.UnirestException;
 
 import java.math.BigInteger;
-import java.security.*;
-import java.text.SimpleDateFormat;
+import java.security.InvalidKeyException;
+import java.security.PrivateKey;
+import java.security.Signature;
+import java.security.SignatureException;
 import java.util.Base64;
-import java.util.Date;
 
 import static client.Client.debug;
 import static client.ClientCrypto.*;
@@ -80,15 +81,10 @@ public class Send implements Runnable{
         try {
             s = createSignature(privateKey);
             s.update(source.getBytes());
-            //System.out.println("[HEREC] from: " + source);
             s.update(dest.getBytes());
-            //System.out.println("[HEREC] to: " + dest);
             s.update(BigInteger.valueOf(Integer.parseInt(amount)).toByteArray());
-            //System.out.println("[HEREC] amount: " + amount);
             s.update(previousTransaction.getBytes());
-            //System.out.println("[HEREC] prevTrans: " + previousTransaction);
             s.update(timestamp.getBytes());
-            //System.out.println("[HEREC] timestamp: " + timestamp);
             sig = s.sign();
         } catch (InvalidKeyException | SignatureException e) {
             System.out.println("[ERROR] " + e.getMessage());

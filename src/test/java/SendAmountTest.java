@@ -1,10 +1,12 @@
-import domain.Account;
-import domain.Transaction;
-import exceptions.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import server.HDSCrypto;
+import server.HDSLib;
+import server.domain.Account;
+import server.domain.Transaction;
+import server.exceptions.*;
 
 import java.math.BigInteger;
 import java.nio.file.Files;
@@ -61,8 +63,8 @@ public class SendAmountTest {
 	@After
 	public void tearDown() throws Exception {
 		HDSLib.forceReset();
-		Files.deleteIfExists(Paths.get("./db/test.mv.db"));
-		Files.deleteIfExists(Paths.get("./db/test.trace.db"));
+		Files.deleteIfExists(Paths.get("./db/test0.mv.db"));
+		Files.deleteIfExists(Paths.get("./db/test0.trace.db"));
 	}
 
 	@Test
@@ -73,7 +75,7 @@ public class SendAmountTest {
 		String pubHash1 = TestAux.hashKey(pubKey1);
 		String pubHash2 = TestAux.hashKey(pubKey2);
 
-		TestAux.sendAmountHelper(pubKey1, pubKey2, 70, privKey1, hdsLib);
+		Transaction t1 = TestAux.sendAmountHelper(pubKey1, pubKey2, 70, "000000", privKey1, hdsLib);
 		Account sender = hdsLib.getAccount(pubHash1);
 		Account receiver = hdsLib.getAccount(pubHash2);
 		assertEquals(30, sender.getAmount());
@@ -87,57 +89,55 @@ public class SendAmountTest {
 		assertEquals(pubHash2, transaction.getTo().getKeyHash());
 		assertTrue(transaction.isPending());
 
-		assertNull(transaction.getReceivedTimestamp());
-		assertNull(transaction.getReceiverSig());
 		Signature s = HDSCrypto.verifySignature(pubKey1);
 		s.update(transaction.getFrom().getKeyHash().getBytes());
 		s.update(transaction.getTo().getKeyHash().getBytes());
 		s.update(BigInteger.valueOf(transaction.getAmount()).toByteArray());
-		s.update(HDSCrypto.dateToString(transaction.getSentTimestamp()).getBytes());
+		s.update(t1.getTransactionHash().getBytes());
+		s.update(transaction.getTimestamp().getBytes());
 		assertTrue(s.verify(transaction.getSenderSig()));
 
-		Transaction newTransaction = TestAux.sendAmountHelper(pubKey2, pubKey3, 100, privKey2, hdsLib);
+		Transaction newTransaction = TestAux.sendAmountHelper(pubKey2, pubKey3, 100, t1.getTransactionHash(), privKey2, hdsLib);
 		assertNotNull(newTransaction);
-		assertTrue(newTransaction.getId() > transaction.getId());
 	}
 
 	@Test(expected = AccountNotFoundException.class)
 	public void sendAmountSourceAccountNotFound() throws Exception{
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib);
-		TestAux.sendAmountHelper(pubKey2, pubKey1, 50, privKey2, hdsLib);
+		TestAux.sendAmountHelper(pubKey2, pubKey1, 50,"000000", privKey2, hdsLib);
 	}
 
 	@Test(expected = AccountNotFoundException.class)
 	public void sendAmountDestinationAccountNotFound() throws Exception{
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib);
-		TestAux.sendAmountHelper(pubKey1, pubKey2, 50, privKey1, hdsLib);
+		TestAux.sendAmountHelper(pubKey1, pubKey2, 50, "000000",privKey1, hdsLib);
 	}
 
 	@Test(expected = SameSourceAndDestAccountException.class)
 	public void sendAmountSameAccount() throws Exception{
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib);
-		TestAux.sendAmountHelper(pubKey1, pubKey1, 50, privKey1, hdsLib);
+		TestAux.sendAmountHelper(pubKey1, pubKey1, 50, "000000",privKey1, hdsLib);
 	}
 
 	@Test(expected = AccountInsufficientAmountException.class)
 	public void sendAmountAccountNotEnough() throws Exception{
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib);
 		TestAux.registerHelper(pubKey2, privKey2, hdsLib);
-		TestAux.sendAmountHelper(pubKey1, pubKey2, 101, privKey1, hdsLib);
+		TestAux.sendAmountHelper(pubKey1, pubKey2, 101, "000000",privKey1, hdsLib);
 	}
 
 	@Test(expected = InvalidAmountException.class)
 	public void sendAmountNegativeAmount() throws Exception{
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib);
 		TestAux.registerHelper(pubKey2, privKey2, hdsLib);
-		TestAux.sendAmountHelper(pubKey1, pubKey2, -50, privKey1, hdsLib);
+		TestAux.sendAmountHelper(pubKey1, pubKey2, -50, "000000",privKey1, hdsLib);
 	}
 
 	@Test(expected = InvalidAmountException.class)
 	public void sendAmountNeutralAmount() throws Exception{
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib);
 		TestAux.registerHelper(pubKey2, privKey2, hdsLib);
-		TestAux.sendAmountHelper(pubKey1, pubKey2, 0, privKey1, hdsLib);
+		TestAux.sendAmountHelper(pubKey1, pubKey2, 0, "000000",privKey1, hdsLib);
 	}
 
 	@Test(expected = RepeatedTransactionException.class)
@@ -151,15 +151,15 @@ public class SendAmountTest {
 		s.update(BigInteger.valueOf(30).toByteArray());
 		s.update(HDSCrypto.dateToString(timestamp).getBytes());
 		byte[] sig = s.sign();
-		TestAux.sendAmountHelper(pubKey1, pubKey2, 30, privKey1, timestamp, sig, hdsLib);
-		TestAux.sendAmountHelper(pubKey1, pubKey2, 30, privKey1, timestamp, sig, hdsLib);
+		TestAux.sendAmountHelper(pubKey1, pubKey2, 30, privKey1, "000000",HDSCrypto.dateToString(timestamp), sig, hdsLib);
+		TestAux.sendAmountHelper(pubKey1, pubKey2, 30, privKey1, "000000",HDSCrypto.dateToString(timestamp), sig, hdsLib);
 	}
 
 	@Test(expected = InvalidSignatureException.class)
 	public void sendAmountWrongKey() throws Exception{
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib);
 		TestAux.registerHelper(pubKey2, privKey2, hdsLib);
-		TestAux.sendAmountHelper(pubKey1, pubKey2, 50, privKey2, hdsLib);
+		TestAux.sendAmountHelper(pubKey1, pubKey2, 50, "000000",privKey2, hdsLib);
 	}
 
 	@Test(expected = TimestampNotFreshException.class)
@@ -171,7 +171,7 @@ public class SendAmountTest {
 		c.add(Calendar.DATE, 2);
 		Date timestamp = c.getTime();
 
-		TestAux.sendAmountHelper(pubKey1, pubKey2, 30, privKey1, timestamp, hdsLib);
+		TestAux.sendAmountHelper(pubKey1, pubKey2, 30, "000000",privKey1, HDSCrypto.dateToString(timestamp), hdsLib);
 	}
 
 	@Test(expected = InvalidSignatureException.class)
@@ -186,6 +186,6 @@ public class SendAmountTest {
 		s.update(BigInteger.valueOf(amount+1).toByteArray());
 		s.update(HDSCrypto.dateToString(timestamp).getBytes());
 
-		TestAux.sendAmountHelper(pubKey1, pubKey2, amount, privKey1, timestamp, s.sign(), hdsLib);
+		TestAux.sendAmountHelper(pubKey1, pubKey2, amount, privKey1, "000000",HDSCrypto.dateToString(timestamp), s.sign(), hdsLib);
 	}
 }

@@ -8,16 +8,12 @@ import com.mashape.unirest.http.Unirest;
 import com.mashape.unirest.http.exceptions.UnirestException;
 
 import java.security.*;
-import java.text.SimpleDateFormat;
 import java.util.Base64;
-import java.util.Date;
 
-import static client.ClientCrypto.checkServerSignature;
-import static client.ClientCrypto.createSignature;
-import static client.ClientCrypto.prettyPrintJsonString;
 import static client.Client.debug;
+import static client.ClientCrypto.*;
 
-@SuppressWarnings("Duplicates") // TODO: Check all Duplicates after Legacy Client removal, only remove this comment when done
+@SuppressWarnings("Duplicates")
 public class Register implements Runnable {
     private Server server;
     private PublicKey publicKey;

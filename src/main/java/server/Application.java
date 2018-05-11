@@ -4,23 +4,26 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.javalin.Javalin;
 import server.domain.Account;
 import server.domain.AccountState;
 import server.domain.Transaction;
-import io.javalin.Javalin;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.security.*;
-import java.security.spec.InvalidKeySpecException;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.util.*;
+import java.security.cert.CertificateException;
+import java.util.Base64;
+import java.util.List;
+import java.util.Objects;
+import java.util.Scanner;
+
+import static client.ClientCrypto.generateCertificate;
 
 @SuppressWarnings("Duplicates")
 public class Application {
@@ -206,37 +209,132 @@ public class Application {
     }
 
     public static void generateKey() {
-        if (new File("keys/server.priv").isFile()) {
+        if (new File("keys/s"+port+".ks").isFile()) {
             // Open keys from file
             try {
-                byte[] privkeyBytes = Files.readAllBytes(Paths.get("keys/s"+port+".priv"));
-                PKCS8EncodedKeySpec privSpec = new PKCS8EncodedKeySpec(privkeyBytes);
-                KeyFactory factory = KeyFactory.getInstance("EC", "SunEC");
-                serverPrivkey = factory.generatePrivate(privSpec);
-            } catch (IOException e) {
+                LoadKeyStore("s"+port, "password");
+            } catch (FileNotFoundException e) {
                 e.printStackTrace();
-                return;
-            } catch (InvalidKeySpecException | NoSuchAlgorithmException | NoSuchProviderException e) {
-                e.printStackTrace();
-                return;
             }
         } else {
             // Generate new keys
-            KeyPair pair = HDSCrypto.generateKeypairEC();
-            serverPrivkey = pair.getPrivate();
-            serverPubkey = pair.getPublic();
+            GenerateKeyStore("s"+port, "password");
+        }
+    }
 
-            try {
-                FileOutputStream fos = new FileOutputStream("keys/s"+port+".pub");
-                fos.write(serverPubkey.getEncoded());
-                fos.close();
-
-                fos = new FileOutputStream("keys/s"+port+".priv");
-                fos.write(serverPrivkey.getEncoded());
-                fos.close();
-            } catch (java.io.IOException e) {
-                e.printStackTrace();
+    private static void LoadKeyStore(String keyname, String password) throws FileNotFoundException {
+        // Open keystore
+        KeyStore ks = null;
+        try {
+            ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        } catch (KeyStoreException e) {
+            e.printStackTrace();
+            return;
+        }
+        java.io.FileInputStream fis = null;
+        try {
+            fis = new java.io.FileInputStream("keys/"+keyname+".ks");
+            ks.load(fis, password.toCharArray());
+        } catch (CertificateException | NoSuchAlgorithmException | IOException e) {
+            e.printStackTrace();
+            return;
+        } finally {
+            if (fis != null) {
+                try {
+                    fis.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return;
+                }
             }
+        }
+
+        // Get private key from keystore
+        try {
+            serverPrivkey = (PrivateKey)ks.getKey("private", password.toCharArray());
+            serverPubkey = ks.getCertificate("private").getPublicKey();
+        } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException e) {
+            e.printStackTrace();
+        }
+
+        // Hash public key
+        MessageDigest digester = null;
+        try {
+            digester = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            return;
+        }
+        digester.update(serverPubkey.getEncoded());
+    }
+
+    @SuppressWarnings("Duplicates")
+    private static void GenerateKeyStore(String keyname, String password){
+        // Create empty KeyStore
+        KeyStore ks = null;
+        try {
+            ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        } catch (KeyStoreException e) {
+            e.printStackTrace();
+            return;
+        }
+        try {
+            ks.load(null, password.toCharArray());
+        } catch (CertificateException | NoSuchAlgorithmException | IOException e) {
+            e.printStackTrace();
+            return;
+        }
+
+        // Generate keys
+        KeyPairGenerator keyGen = null;
+        SecureRandom random = null;
+        try {
+            keyGen = KeyPairGenerator.getInstance("EC", "SunEC");
+            random = SecureRandom.getInstance("SHA1PRNG", "SUN");
+        } catch (NoSuchAlgorithmException | NoSuchProviderException e1) {
+            e1.printStackTrace();
+        }
+        keyGen.initialize(224, random);
+
+        KeyPair ec = keyGen.generateKeyPair();
+        PublicKey pubkey = ec.getPublic();
+        PrivateKey privkey = ec.getPrivate();
+
+        // Store private key in keystore
+        try {
+            java.security.cert.Certificate[] chain = {generateCertificate("cn=HDS", ec, 365, "SHA256withECDSA")};
+            ks.setKeyEntry("private", privkey, password.toCharArray(), chain);
+        } catch (GeneralSecurityException | IOException e) {
+            e.printStackTrace();
+            return;
+        }
+
+        java.io.FileOutputStream fos = null;
+        try {
+            fos = new java.io.FileOutputStream("keys/"+keyname+".ks", false);
+            ks.store(fos, password.toCharArray());
+        } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException e) {
+            e.printStackTrace();
+            return;
+        } finally {
+            if (fos != null) {
+                try {
+                    fos.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        // Update key vars and hashed key
+        serverPubkey = pubkey;
+        serverPrivkey = privkey;
+        MessageDigest digester = null;
+        try {
+            digester = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            return;
         }
     }
 

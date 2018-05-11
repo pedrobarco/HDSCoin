@@ -105,7 +105,6 @@ public class ClientCrypto {
         return url.replace("+",".").replace("/","_").replace("=","-");
     }
 
-    // TODO: Consider renaming class to ClientAux
     public static String prettyPrintJsonString(JsonNode jsonNode) {
         try {
             ObjectMapper mapper = new ObjectMapper();

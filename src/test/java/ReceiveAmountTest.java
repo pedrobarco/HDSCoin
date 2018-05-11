@@ -1,15 +1,16 @@
-import domain.Account;
-import domain.Transaction;
-import exceptions.InvalidSignatureException;
-import exceptions.TimestampNotFreshException;
-import exceptions.TransactionAlreadyReceivedException;
-import exceptions.TransactionNotFoundException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import server.HDSCrypto;
+import server.HDSLib;
+import server.domain.Account;
+import server.domain.Transaction;
+import server.exceptions.InvalidSignatureException;
+import server.exceptions.TimestampNotFreshException;
+import server.exceptions.TransactionAlreadyReceivedException;
+import server.exceptions.TransactionNotFoundException;
 
-import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.*;
@@ -58,8 +59,8 @@ public class ReceiveAmountTest {
 	@After
 	public void tearDown() throws Exception {
 		HDSLib.forceReset();
-		Files.deleteIfExists(Paths.get("./db/test.mv.db"));
-		Files.deleteIfExists(Paths.get("./db/test.trace.db"));
+		Files.deleteIfExists(Paths.get("./db/test0.mv.db"));
+		Files.deleteIfExists(Paths.get("./db/test0.trace.db"));
 	}
 
 	@Test
@@ -67,15 +68,15 @@ public class ReceiveAmountTest {
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib).getKeyHash();
 		String a2Hash = TestAux.registerHelper(pubKey2, privKey2, hdsLib).getKeyHash();
 
-		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, privKey1, hdsLib);
-		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey2, hdsLib);
+		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, "000000", privKey1, hdsLib);
+		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey2, sentTransaction.getTransactionHash(), hdsLib);
 		Transaction doneTransaction = hdsLib.getTransaction(sentTransaction.getId());
 		assertNotNull(doneTransaction.getSenderSig());
-		assertNotNull(doneTransaction.getReceiverSig());
+		assertNotNull(doneTransaction.getSig());
 		Signature s = HDSCrypto.verifySignature(pubKey2);
-		s.update(BigInteger.valueOf(doneTransaction.getId()).toByteArray());
-		s.update(HDSCrypto.dateToString(doneTransaction.getReceivedTimestamp()).getBytes());
-		assertTrue(s.verify(doneTransaction.getReceiverSig()));
+		s.update(doneTransaction.getId().getBytes());
+		s.update(doneTransaction.getTimestamp().getBytes());
+		assertTrue(s.verify(doneTransaction.getSig()));
 
 		Account a2 = hdsLib.getAccount(a2Hash);
 		assertEquals(150, a2.getAmount());
@@ -85,51 +86,51 @@ public class ReceiveAmountTest {
 
 	@Test(expected = TransactionNotFoundException.class)
 	public void receiveAmountIdNotFound() throws Exception{
-		TestAux.receiveAmountHelper(691, privKey1, hdsLib);
+		TestAux.receiveAmountHelper("69-asd", privKey1, "000000", hdsLib);
 	}
 
 	@Test(expected = TransactionAlreadyReceivedException.class)
 	public void receiveAmountAlreadyReceived() throws Exception{
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib).getKeyHash();
 		TestAux.registerHelper(pubKey2, privKey2, hdsLib).getKeyHash();
-		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, privKey1, hdsLib);
+		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, "000000", privKey1, hdsLib);
 
-		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey2, hdsLib);
-		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey2, hdsLib);
+		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey2, sentTransaction.getTransactionHash(),hdsLib);
+		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey2, sentTransaction.getTransactionHash(), hdsLib);
 	}
 
 	@Test(expected = InvalidSignatureException.class)
 	public void receiveAmountWrongKey() throws Exception{
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib).getKeyHash();
 		TestAux.registerHelper(pubKey2, privKey2, hdsLib).getKeyHash();
-		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, privKey1, hdsLib);
+		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, "000000", privKey1, hdsLib);
 
-		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey1, hdsLib);
+		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey1,sentTransaction.getTransactionHash(), hdsLib);
 	}
 
 	@Test(expected = TimestampNotFreshException.class)
 	public void receiveAmountWrongTimestamp() throws Exception{
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib).getKeyHash();
 		TestAux.registerHelper(pubKey2, privKey2, hdsLib).getKeyHash();
-		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, privKey1, hdsLib);
+		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, "000000",privKey1, hdsLib);
 
 		Calendar c = Calendar.getInstance();
 		c.setTime(new Date());
 		c.add(Calendar.DATE, 2);
 		Date timestamp = c.getTime();
-		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey1, timestamp, hdsLib);
+		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey1, sentTransaction.getTransactionHash(),HDSCrypto.dateToString(timestamp), hdsLib);
 	}
 
 	@Test(expected = InvalidSignatureException.class)
 	public void receiveAmountWrongSignature() throws Exception{
 		TestAux.registerHelper(pubKey1, privKey1, hdsLib).getKeyHash();
 		TestAux.registerHelper(pubKey2, privKey2, hdsLib).getKeyHash();
-		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, privKey1, hdsLib);
+		Transaction sentTransaction = TestAux.sendAmountHelper(pubKey1, pubKey2, 50, "000000",privKey1, hdsLib);
 
 		Date timestamp = new Date();
 		Signature s = HDSCrypto.createSignature(privKey1);
-		s.update(BigInteger.valueOf(sentTransaction.getId()+1).toByteArray());
+		s.update((sentTransaction.getId()+"a").getBytes());
 		s.update(HDSCrypto.dateToString(timestamp).getBytes());
-		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey1, timestamp, s.sign(), hdsLib);
+		TestAux.receiveAmountHelper(sentTransaction.getId(), privKey1, sentTransaction.getTransactionHash(),HDSCrypto.dateToString(timestamp), s.sign(), hdsLib);
 	}
 }

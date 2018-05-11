@@ -158,7 +158,7 @@ public class HDSLib {
 				return null;
 			}
 
-			String newId = "0-"+sourceKeyHash; // TODO: Honestly this is stupid, just put the int in Transaction as well
+			String newId = "0-"+sourceKeyHash; // TODO: Just put the int in Transaction as well
 			if(actualPreviousTransaction != null){
 				newId = calculateNextId(actualPreviousTransaction);
 				if (!previousTransaction.equals(actualPreviousTransactionHash)){

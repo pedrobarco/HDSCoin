@@ -1,12 +1,13 @@
-import domain.Account;
-import domain.AccountState;
-import domain.Transaction;
-import exceptions.AccountNotFoundException;
-import exceptions.NullArgumentException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import server.HDSLib;
+import server.domain.Account;
+import server.domain.AccountState;
+import server.domain.Transaction;
+import server.exceptions.AccountNotFoundException;
+import server.exceptions.NullArgumentException;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -55,8 +56,8 @@ public class CheckAccountTest {
 	@After
 	public void tearDown() throws Exception {
 		HDSLib.forceReset();
-		Files.deleteIfExists(Paths.get("./db/test.mv.db"));
-		Files.deleteIfExists(Paths.get("./db/test.trace.db"));
+		Files.deleteIfExists(Paths.get("./db/test0.mv.db"));
+		Files.deleteIfExists(Paths.get("./db/test0.trace.db"));
 	}
 
 	@Test
@@ -70,7 +71,7 @@ public class CheckAccountTest {
 		assertEquals(100, s1.getAmount());
 		assertEquals(0, s1.getPendingTransactions().size());
 
-		Transaction t = TestAux.sendAmountHelper(pubKey2, pubKey1, 30, privKey2, hdsLib);
+		Transaction t = TestAux.sendAmountHelper(pubKey2, pubKey1, 30, "000000",privKey2, hdsLib);
 		AccountState receiver = hdsLib.checkAccount(a1.getKeyHash());
 		assertNotNull(receiver);
 		assertEquals(a1.getKeyHash(), receiver.getKeyHash());
@@ -82,7 +83,7 @@ public class CheckAccountTest {
 		assertEquals(70, sender.getAmount());
 		assertEquals(0, sender.getPendingTransactions().size());
 
-		TestAux.receiveAmountHelper(t.getId(), privKey1, hdsLib);
+		TestAux.receiveAmountHelper(t.getId(), privKey1, t.getTransactionHash(),hdsLib);
 		receiver = hdsLib.checkAccount(a1.getKeyHash());
 		assertNotNull(receiver);
 		assertEquals(a1.getKeyHash(), receiver.getKeyHash());

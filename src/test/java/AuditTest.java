@@ -1,10 +1,11 @@
-import domain.Transaction;
-import exceptions.AccountNotFoundException;
-import exceptions.NullArgumentException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import server.HDSLib;
+import server.domain.Transaction;
+import server.exceptions.AccountNotFoundException;
+import server.exceptions.NullArgumentException;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -54,8 +55,8 @@ public class AuditTest {
 	@After
 	public void tearDown() throws Exception {
 		HDSLib.forceReset();
-		Files.deleteIfExists(Paths.get("./db/test.mv.db"));
-		Files.deleteIfExists(Paths.get("./db/test.trace.db"));
+		Files.deleteIfExists(Paths.get("./db/test0.mv.db"));
+		Files.deleteIfExists(Paths.get("./db/test0.trace.db"));
 	}
 
 	@Test
@@ -67,7 +68,7 @@ public class AuditTest {
 		assertNotNull(transactionList);
 		assertEquals(0, transactionList.size());
 
-		Transaction t = TestAux.sendAmountHelper(pubKey1, pubKey2, 30, privKey1, hdsLib);
+		Transaction t = TestAux.sendAmountHelper(pubKey1, pubKey2, 30, "000000",privKey1, hdsLib);
 		List<Transaction> senderList = hdsLib.audit(TestAux.hashKey(pubKey1));
 		List<Transaction> receiverList = hdsLib.audit(TestAux.hashKey(pubKey1));
 		assertNotNull(senderList);
@@ -77,7 +78,7 @@ public class AuditTest {
 		assertEquals(1, receiverList.size());
 		assertEquals(t, receiverList.get(0));
 
-		TestAux.receiveAmountHelper(t.getId(), privKey2, hdsLib);
+		TestAux.receiveAmountHelper(t.getId(), privKey2, t.getTransactionHash(),hdsLib);
 		t = hdsLib.getTransaction(t.getId());
 		senderList = hdsLib.audit(TestAux.hashKey(pubKey1));
 		receiverList = hdsLib.audit(TestAux.hashKey(pubKey1));
